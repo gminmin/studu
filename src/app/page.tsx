@@ -1,15 +1,19 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   GoogleAuthProvider,
   onAuthStateChanged,
   getRedirectResult,
-  signInWithPopup,
   signInWithRedirect,
-  signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  sendSignInLinkToEmail,
+  signInWithEmailLink,
+  isSignInWithEmailLink,
   sendPasswordResetEmail,
+  updateProfile,
+  reload,
   signOut,
   type User,
 } from 'firebase/auth';
@@ -25,11 +29,12 @@ import { MobileScanView } from '@/components/MobileScanView';
 import { LearningFlowView } from '@/components/LearningFlowView';
 import { WrongNoteView } from '@/components/WrongNoteView';
 import { TwinProblemModal } from '@/components/TwinProblemModal';
-import { AccountModal } from '@/components/AccountModal';
+import { AuthScreen } from '@/components/AuthScreen';
 import { auth, firebaseConfigured } from '@/lib/firebase/client';
 import { WifiOff } from 'lucide-react';
 
 type AppStep = 'scan' | 'hints' | 'solution';
+type SignupStage = 'sent' | 'confirm' | 'nickname' | null;
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'scan' | 'wrongNote'>('scan');
@@ -48,7 +53,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // 모달 상태
-  const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false);
+  const [isAuthScreenOpen, setIsAuthScreenOpen] = useState<boolean>(false);
+  const [signupStage, setSignupStage] = useState<SignupStage>(null);
+  const [signupEmail, setSignupEmail] = useState('');
   const [isTwinModalOpen, setIsTwinModalOpen] = useState<boolean>(false);
   const [activeTwinProblem, setActiveTwinProblem] = useState<{
     problem: StandardProblemResponse['twinProblem'];
@@ -64,6 +71,83 @@ export default function Home() {
 
   // 오답노트 상태
   const [wrongNotes, setWrongNotes] = useState<WrongNoteItem[]>([]);
+
+  const handleCompleteEmailLink = useCallback(async (email: string) => {
+    if (!auth || typeof window === 'undefined' || !isSignInWithEmailLink(auth, window.location.href)) {
+      setAuthError('인증 링크가 유효하지 않거나 만료됐어요. 인증 메일을 다시 요청해 주세요.');
+      return;
+    }
+    setAuthError(null);
+    setIsAuthActionLoading(true);
+    try {
+      await signInWithEmailLink(auth, email, window.location.href);
+      const pendingPassword = sessionStorage.getItem('tudu_signup_password');
+      if (!pendingPassword) {
+        setAuthError('인증이 완료됐어요. 가입을 시작한 기기에서 이어가 주세요.');
+        setSignupStage('confirm');
+        setIsAuthScreenOpen(true);
+      } else {
+        await signOut(auth);
+        await createUserWithEmailAndPassword(auth, email, pendingPassword);
+        sessionStorage.removeItem('tudu_signup_password');
+        localStorage.removeItem('tudu_signup_email');
+        localStorage.setItem('tudu_signup_stage', 'nickname');
+        setSignupEmail(email);
+        setSignupStage('nickname');
+        setIsAuthScreenOpen(true);
+      }
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+    } finally {
+      setIsAuthActionLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!auth) {
+      queueMicrotask(() => setIsAuthLoading(false));
+      return;
+    }
+    let active = true;
+    getRedirectResult(auth).catch((error) => {
+      if (active) setAuthError(getAuthErrorMessage(error));
+    });
+    if (isSignInWithEmailLink(auth, window.location.href)) {
+      const savedEmail = localStorage.getItem('tudu_signup_email');
+      if (savedEmail) {
+
+        queueMicrotask(() => {
+          if (!active) return;
+          setSignupEmail(savedEmail);
+          setSignupStage('nickname');
+          setIsAuthScreenOpen(true);
+          void handleCompleteEmailLink(savedEmail);
+        });
+      } else {
+        queueMicrotask(() => {
+          if (!active) return;
+          setSignupStage('confirm');
+          setIsAuthScreenOpen(true);
+        });
+      }
+    }
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      if (!active) return;
+      setUser(nextUser);
+      setIsAuthLoading(false);
+      const stage = localStorage.getItem('tudu_signup_stage');
+      if (stage === 'nickname') {
+        setSignupStage(stage);
+        setSignupEmail(nextUser?.email ?? localStorage.getItem('tudu_signup_email') ?? '');
+        setIsAuthScreenOpen(true);
+      }
+    });
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [handleCompleteEmailLink]);
 
   // 네트워크 상태 감지 리스너
   useEffect(() => {
@@ -102,34 +186,6 @@ export default function Home() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!auth) {
-      queueMicrotask(() => setIsAuthLoading(false));
-      return;
-    }
-
-    let active = true;
-    getRedirectResult(auth).catch((error: unknown) => {
-      if (active) setAuthError(getAuthErrorMessage(error));
-    });
-    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
-      if (!active) return;
-      setUser(nextUser);
-      setIsAuthLoading(false);
-    }, () => {
-      if (active) {
-        setUser(null);
-        setIsAuthLoading(false);
-        setAuthError('로그인 상태를 확인하지 못했어요. 다시 시도해주세요.');
-      }
-    });
-
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, []);
-
   const handleSignIn = async () => {
     if (!auth) return;
     setAuthError(null);
@@ -137,12 +193,7 @@ export default function Home() {
     setIsAuthActionLoading(true);
     const provider = new GoogleAuthProvider();
     try {
-      if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
-        await signInWithRedirect(auth, provider);
-        return;
-      }
-      await signInWithPopup(auth, provider);
-      setIsAccountModalOpen(false);
+      await signInWithRedirect(auth, provider);
     } catch (error) {
       setAuthError(getAuthErrorMessage(error));
     } finally {
@@ -157,7 +208,7 @@ export default function Home() {
     setIsAuthActionLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      setIsAccountModalOpen(false);
+      setIsAuthScreenOpen(false);
     } catch (error) {
       setAuthError(getAuthErrorMessage(error));
     } finally {
@@ -165,19 +216,58 @@ export default function Home() {
     }
   };
 
-  const handleEmailSignUp = async (email: string, password: string) => {
+  const handleSendEmailLink = async (email: string, password: string) => {
     if (!auth) return;
     setAuthError(null);
     setAuthMessage(null);
     setIsAuthActionLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      setIsAccountModalOpen(false);
+      await sendSignInLinkToEmail(auth, email, {
+        url: `${window.location.origin}/?signup=email`,
+        handleCodeInApp: true,
+      });
+      localStorage.setItem('tudu_signup_email', email);
+      localStorage.setItem('tudu_signup_stage', 'sent');
+      sessionStorage.setItem('tudu_signup_password', password);
+      setAuthError(null);
+      setSignupEmail(email);
+      setSignupStage('sent');
+      setIsAuthScreenOpen(true);
     } catch (error) {
       setAuthError(getAuthErrorMessage(error));
     } finally {
       setIsAuthActionLoading(false);
     }
+  };
+
+  const handleSetSignupNickname = async (nickname: string) => {
+    if (!auth?.currentUser) return false;
+    setAuthError(null);
+    setIsAuthActionLoading(true);
+    try {
+      await updateProfile(auth.currentUser, { displayName: nickname });
+      await reload(auth.currentUser);
+      setUser(auth.currentUser);
+      localStorage.removeItem('tudu_signup_email');
+      localStorage.removeItem('tudu_signup_stage');
+      setSignupStage(null);
+      setIsAuthScreenOpen(false);
+      return true;
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+      return false;
+    } finally {
+      setIsAuthActionLoading(false);
+    }
+  };
+
+  const handleCancelSignup = () => {
+    localStorage.removeItem('tudu_signup_email');
+    localStorage.removeItem('tudu_signup_stage');
+    sessionStorage.removeItem('tudu_signup_password');
+    setSignupStage(null);
+    setSignupEmail('');
+    setAuthError(null);
   };
 
   const handlePasswordReset = async (email: string) => {
@@ -202,7 +292,7 @@ export default function Home() {
     setAuthMessage(null);
     try {
       await signOut(auth);
-      setIsAccountModalOpen(false);
+      setIsAuthScreenOpen(false);
     } catch {
       setAuthError('로그아웃하지 못했어요. 다시 시도해주세요.');
     } finally {
@@ -226,7 +316,7 @@ export default function Home() {
 
     if (!user) {
       setAuthError('문제를 분석하려면 Google 계정으로 로그인해주세요.');
-      setIsAccountModalOpen(true);
+      setIsAuthScreenOpen(true);
       return;
     }
 
@@ -396,7 +486,7 @@ export default function Home() {
         onOpenAccount={() => {
           setAuthError(null);
           setAuthMessage(null);
-          setIsAccountModalOpen(true);
+          setIsAuthScreenOpen(true);
         }}
       />}
 
@@ -443,9 +533,11 @@ export default function Home() {
         )}
       </main>
 
-      <AccountModal
-        isOpen={isAccountModalOpen}
+      <AuthScreen
+        isOpen={isAuthScreenOpen}
         user={user}
+        signupStage={signupStage}
+        signupEmail={signupEmail}
         isLoading={isAuthLoading || isAuthActionLoading}
         error={authError}
         message={authMessage}
@@ -453,12 +545,15 @@ export default function Home() {
         onClose={() => {
           setAuthError(null);
           setAuthMessage(null);
-          setIsAccountModalOpen(false);
+          setIsAuthScreenOpen(false);
         }}
-        onSignIn={handleSignIn}
+        onGoogleSignIn={handleSignIn}
         onEmailSignIn={handleEmailSignIn}
-        onEmailSignUp={handleEmailSignUp}
+        onSendEmailLink={handleSendEmailLink}
+        onCompleteEmailLink={handleCompleteEmailLink}
+        onSetNickname={handleSetSignupNickname}
         onPasswordReset={handlePasswordReset}
+        onCancelSignup={handleCancelSignup}
         onSignOut={handleSignOut}
       />
 
