@@ -293,15 +293,10 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
 
         {/* 뷰파인더 타겟 가이드라인 */}
         {!capturedImage && (
-          <div className="pointer-events-none absolute inset-x-8 top-16 bottom-32 border-2 border-white/30 rounded-2xl flex flex-col justify-between p-3">
+          <div className="pointer-events-none absolute inset-x-8 top-16 bottom-32 flex flex-col justify-between p-3">
             <div className="flex justify-between">
               <div className="w-6 h-6 rounded-tl-lg border-l-3 border-t-3 border-white" />
               <div className="w-6 h-6 rounded-tr-lg border-r-3 border-t-3 border-white" />
-            </div>
-            <div className="text-center">
-              <span className="rounded-lg border border-slate-900 bg-white px-3 py-2 text-sm font-bold text-slate-900">
-                문제를 가이드 박스 안에 맞춰주세요
-              </span>
             </div>
             <div className="flex justify-between">
               <div className="w-6 h-6 rounded-bl-lg border-b-3 border-l-3 border-white" />
@@ -406,7 +401,7 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
         <div className="absolute inset-x-0 bottom-24 z-20 flex justify-center pointer-events-none">
           <button
             onClick={handleShutter}
-            className="pointer-events-auto h-16 w-16 rounded-full border-2 border-slate-900 bg-white active:scale-90"
+            className="pointer-events-auto h-16 w-16 rounded-full border-0 bg-white active:scale-90"
             title="촬영하기"
             aria-label="촬영하기"
           />

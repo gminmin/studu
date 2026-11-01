@@ -129,11 +129,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         </button>
       </header>
 
-      <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-8 sm:px-8">
-        <div className="mb-7">
+      <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-4 sm:px-8 sm:py-6">
+        <div className="mb-4">
           <p className="text-sm font-semibold text-slate-600">tudu 계정</p>
-          <h1 className="mt-2 text-2xl font-extrabold tracking-tight">{heading}</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">
+          <h1 className="mt-1.5 text-2xl font-extrabold tracking-tight">{heading}</h1>
+          <p className="mt-2 text-sm leading-5 text-slate-600">
             {signupStage === 'sent'
               ? `${signupEmail} 주소로 보낸 링크를 눌러 이메일을 확인해주세요.`
               : signupStage === 'nickname'
@@ -232,8 +232,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             <button type="button" onClick={() => { setView('login'); onCancelSignup(); }} className={secondaryButtonClass}>로그인으로 돌아가기</button>
           </form>
         ) : (
-          <div className="space-y-4">
-            <form onSubmit={submitLogin} className="space-y-4">
+          <div className="space-y-2.5">
+            <form onSubmit={submitLogin} className="space-y-2.5">
               <Field label="이메일" htmlFor="auth-login-email">
                 <input id="auth-login-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass} placeholder="name@example.com" />
               </Field>
@@ -245,13 +245,14 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
                 {isLoading ? '로그인 중…' : '이메일로 로그인'}
               </button>
             </form>
-            <button type="button" onClick={() => setView('reset')} className="min-h-10 w-full text-sm font-medium text-slate-500">비밀번호를 잊으셨나요?</button>
+            <div className="mx-auto grid w-fit grid-cols-[1fr_auto_1fr] items-center gap-4 text-sm font-medium text-slate-500">
+              <button type="button" onClick={() => setView('reset')} className="justify-self-end py-1">비밀번호 찾기</button>
+              <span aria-hidden="true" className="h-4 w-px bg-slate-300" />
+              <button type="button" onClick={() => { setView('signup'); setLocalError(null); }} className="justify-self-start py-1">가입하기</button>
+            </div>
             <Divider />
             <button type="button" onClick={onGoogleSignIn} disabled={isLoading} className={secondaryButtonClass}>
               <GoogleMark /> Google로 계속하기
-            </button>
-            <button type="button" onClick={() => { setView('signup'); setLocalError(null); }} className="min-h-10 w-full text-sm font-medium text-slate-500">
-              가입하기
             </button>
           </div>
         )}
@@ -259,8 +260,8 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
         {message && signupStage !== 'sent' && view !== 'reset' && (
           <p role="status" className="mt-4 text-center text-sm text-slate-700">{message}</p>
         )}
-        <p className="mt-8 text-center text-xs leading-5 text-slate-500">
-          로그인하면 서비스 이용에 필요한 계정 정보가 Firebase에 저장됩니다.
+        <p className="mt-4 text-center text-xs leading-5 text-slate-500">
+          귀하의 정보는 동의 없이 공개되지 않습니다.
         </p>
       </section>
     </main>
@@ -282,7 +283,7 @@ function ErrorText({ children }: { children: React.ReactNode }) {
 
 function Divider() {
   return (
-    <div className="flex items-center gap-3 text-xs text-slate-500">
+    <div className="mx-auto flex w-full max-w-xs items-center justify-center gap-4 py-1 text-xs text-slate-500">
       <span className="h-px flex-1 bg-slate-300" />
       <span>또는</span>
       <span className="h-px flex-1 bg-slate-300" />
@@ -290,9 +291,9 @@ function Divider() {
   );
 }
 
-const inputClass = 'min-h-14 w-full rounded-xl border border-slate-400 px-4 text-base font-normal text-slate-950 focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200';
-const primaryButtonClass = 'flex min-h-14 w-full items-center justify-center rounded-xl border border-slate-900 bg-slate-900 px-4 text-base font-bold text-white disabled:opacity-50';
-const secondaryButtonClass = 'flex min-h-12 w-full items-center justify-center rounded-xl border border-slate-400 px-4 text-sm font-semibold text-slate-900 disabled:opacity-50';
+const inputClass = 'min-h-12 w-full rounded-xl border border-slate-400 px-4 text-base font-normal text-slate-950 focus:border-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200';
+const primaryButtonClass = 'flex min-h-12 w-full items-center justify-center rounded-xl border border-slate-900 bg-slate-900 px-4 text-base font-bold text-white disabled:opacity-50';
+const secondaryButtonClass = 'flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-400 px-4 text-sm font-semibold text-slate-900 disabled:opacity-50';
 
 function GoogleMark() {
   return (
