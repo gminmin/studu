@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { TwinProblem } from '@/types/problem';
 import { MathRenderer } from './MathRenderer';
-import { X, Sparkles, CheckCircle2, XCircle, Award, RotateCcw, ArrowRight } from 'lucide-react';
+import { X, Sparkles, XCircle, Award } from 'lucide-react';
 
 interface TwinProblemModalProps {
   isOpen: boolean;
@@ -57,11 +57,11 @@ export const TwinProblemModal: React.FC<TwinProblemModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 relative border border-slate-100 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-4">
+      <div className="relative max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl border border-slate-900 bg-white p-4 pb-[max(env(safe-area-inset-bottom),1rem)] sm:rounded-2xl sm:p-6">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 transition"
+          className="absolute right-3 top-3 flex h-12 w-12 items-center justify-center rounded-xl border border-slate-300 text-slate-900"
           aria-label="Close"
         >
           <X className="w-5 h-5" />
@@ -69,25 +69,25 @@ export const TwinProblemModal: React.FC<TwinProblemModalProps> = ({
 
         {/* 헤더 */}
         <div className="flex items-center gap-2 mb-1">
-          <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
-            <Sparkles className="w-4 h-4" />
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-300 text-slate-900">
+            <Sparkles className="h-5 w-5" />
           </span>
-          <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
+          <span className="pr-12 text-sm font-bold text-slate-700">
             쌍둥이 변형 문제 (Twin Problem)
           </span>
         </div>
-        <h3 className="font-extrabold text-base text-slate-900 mb-4">
+        <h3 className="mb-4 pr-10 text-lg font-extrabold text-slate-900">
           [{topic}] 개념 마스터 챌린지
         </h3>
 
         {/* 문제 지문 */}
-        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 leading-relaxed font-medium">
+        <div className="rounded-xl border border-slate-400 p-4 text-base leading-7 font-medium text-slate-900">
           <MathRenderer content={twinProblem.question} />
         </div>
 
         {/* 정답 입력 폼 */}
         <form onSubmit={handleSubmit} className="mt-4 space-y-3">
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <input
               type="text"
               placeholder="정답 입력 (숫자 또는 단답)"
@@ -96,15 +96,15 @@ export const TwinProblemModal: React.FC<TwinProblemModalProps> = ({
                 setUserAnswer(e.target.value);
                 if (isCorrect === false) setIsCorrect(null);
               }}
-              className="flex-1 px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white transition"
+              className="min-h-12 min-w-0 flex-1 rounded-xl border border-slate-400 px-4 text-base text-slate-900 focus:border-slate-900 focus:outline-none"
             />
             <button
               type="submit"
               disabled={!userAnswer.trim()}
-              className={`px-5 py-2.5 rounded-xl font-bold text-xs transition ${
+              className={`min-h-12 rounded-xl border px-5 text-base font-bold ${
                 !userAnswer.trim()
-                  ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs'
+                  ? 'cursor-not-allowed border-slate-300 bg-white text-slate-500'
+                  : 'border-slate-900 bg-slate-900 text-white'
               }`}
             >
               제출 및 채점
@@ -113,15 +113,15 @@ export const TwinProblemModal: React.FC<TwinProblemModalProps> = ({
 
           {/* 오답 알림 */}
           {isCorrect === false && (
-            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 flex items-center justify-between">
+            <div className="flex flex-col items-start justify-between gap-2 rounded-xl border border-slate-400 p-3 text-sm text-slate-800 sm:flex-row sm:items-center">
               <div className="flex items-center gap-1.5">
-                <XCircle className="w-4 h-4 shrink-0" />
+                <XCircle className="h-5 w-5 shrink-0" />
                 <span>틀렸습니다. 원본 문제의 풀이 공식을 다시 생각해보세요!</span>
               </div>
               <button
                 type="button"
                 onClick={() => setShowExplanation(true)}
-                className="text-xs text-rose-800 font-bold underline shrink-0 ml-2"
+                className="min-h-11 rounded-lg border border-slate-400 px-3 text-sm font-bold text-slate-900"
               >
                 해설 보기
               </button>
@@ -130,14 +130,14 @@ export const TwinProblemModal: React.FC<TwinProblemModalProps> = ({
 
           {/* 정답 및 마스터 획득 알림 */}
           {isCorrect === true && (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-center space-y-2 animate-in fade-in">
-              <div className="inline-flex p-2 bg-emerald-100 text-emerald-600 rounded-full">
+            <div className="space-y-2 rounded-xl border border-slate-900 p-4 text-center">
+              <div className="inline-flex rounded-full border border-slate-400 p-2 text-slate-900">
                 <Award className="w-6 h-6" />
               </div>
-              <h4 className="font-black text-base text-emerald-800">
+              <h4 className="text-lg font-black text-slate-900">
                 개념 마스터 완료! 🏆
               </h4>
-              <p className="text-xs text-emerald-700">
+              <p className="text-base leading-6 text-slate-700">
                 변형 문제까지 완벽하게 정복하셨습니다. 이 문제는 오답노트에서 &apos;마스터 완료&apos;로 전환됩니다.
               </p>
             </div>
@@ -146,14 +146,14 @@ export const TwinProblemModal: React.FC<TwinProblemModalProps> = ({
 
         {/* 변형 문제 해설 블록 */}
         {showExplanation && (
-          <div className="mt-4 p-4 bg-indigo-50/60 border border-indigo-100 rounded-xl space-y-2 text-xs animate-in fade-in">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-indigo-900">[변형 문제 정답 및 풀이]</span>
-              <span className="font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200">
+          <div className="mt-4 space-y-2 rounded-xl border border-slate-400 p-4 text-sm">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-bold text-slate-900">[변형 문제 정답 및 풀이]</span>
+              <span className="rounded-md border border-slate-400 px-2 py-1 font-bold text-slate-900">
                 정답: {twinProblem.correctAnswer}
               </span>
             </div>
-            <div className="text-slate-700 leading-relaxed">
+            <div className="text-base leading-7 text-slate-800">
               <MathRenderer content={twinProblem.explanation} />
             </div>
           </div>
@@ -163,7 +163,7 @@ export const TwinProblemModal: React.FC<TwinProblemModalProps> = ({
         <div className="mt-6 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition"
+            className="min-h-12 w-full rounded-xl border border-slate-400 px-4 text-base font-bold text-slate-900 sm:w-auto"
           >
             닫기
           </button>

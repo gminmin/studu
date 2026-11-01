@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type, Schema } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
+import type { Part, Schema } from '@google/genai';
 import { AIModelMode, StandardProblemResponse, SubjectType } from '@/types/problem';
 import { getSubjectStrategy } from './subjects/registry';
 
@@ -17,6 +18,27 @@ const problemResponseSchema: Schema = {
     extractedText: {
       type: Type.STRING,
       description: '인식된 문제 원본 텍스트'
+    },
+    problemBreakdown: {
+      type: Type.OBJECT,
+      description: '학생이 문제를 먼저 해석하도록 정리한 구조',
+      properties: {
+        summary: { type: Type.STRING, description: '문제가 요구하는 바를 쉬운 말로 한 문장 요약' },
+        givens: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { label: { type: Type.STRING }, value: { type: Type.STRING } }, required: ['label', 'value'] } },
+        target: { type: Type.STRING, description: '구해야 하는 값 또는 판단' }
+      },
+      required: ['summary', 'givens', 'target']
+    },
+    conceptReference: {
+      type: Type.OBJECT,
+      description: '풀이에 실제로 적용할 공식, 문법 또는 과학 법칙',
+      properties: {
+        name: { type: Type.STRING },
+        statement: { type: Type.STRING, description: '정확한 공식/규칙과 조건' },
+        application: { type: Type.STRING, description: '이 문제가 해당 개념을 쓰는 이유' },
+        source: { type: Type.STRING, description: '신뢰 가능한 출처명 또는 교과서 단원. 확인하지 않은 URL 금지' }
+      },
+      required: ['name', 'statement', 'application']
     },
     hints: {
       type: Type.ARRAY,
@@ -67,6 +89,27 @@ const problemResponseSchema: Schema = {
       },
       required: ['question', 'correctAnswer', 'explanation']
     },
+    visualGuide: {
+      type: Type.OBJECT,
+      description: '수학 기하 도형, 함수 좌표 그래프, 과학 실험 표/다이어그램 시각 자료',
+      properties: {
+        type: { type: Type.STRING, description: 'geometry | graph | table | diagram | none' },
+        title: { type: Type.STRING, description: '시각 자료 제목' },
+        svgContent: {
+          type: Type.STRING,
+          description: '완전한 SVG 코드 (예: <svg viewBox="0 0 320 200" xmlns="http://www.w3.org/2000/svg">...도형 및 수치 라벨...</svg>). 기하나 그래프 문제일 때 권장'
+        },
+        tableData: {
+          type: Type.OBJECT,
+          description: '표 데이터',
+          properties: {
+            headers: { type: Type.ARRAY, items: { type: Type.STRING } },
+            rows: { type: Type.ARRAY, items: { type: Type.ARRAY, items: { type: Type.STRING } } }
+          }
+        },
+        caption: { type: Type.STRING, description: '시각 자료에 대한 1줄 설명' }
+      }
+    },
     englishGuide: {
       type: Type.OBJECT,
       description: '영어 과목 전용 가이드',
@@ -107,7 +150,7 @@ const problemResponseSchema: Schema = {
       }
     }
   },
-  required: ['subject', 'topic', 'extractedText', 'hints', 'fullSolution', 'twinProblem']
+  required: ['subject', 'topic', 'extractedText', 'problemBreakdown', 'conceptReference', 'hints', 'fullSolution', 'twinProblem']
 };
 
 export async function analyzeProblemWithGemini(params: {
@@ -117,9 +160,8 @@ export async function analyzeProblemWithGemini(params: {
   imageMimeType?: string;
   problemText?: string;
   userContext?: string;
-  customApiKey?: string;
 }): Promise<StandardProblemResponse> {
-  const apiKey = params.customApiKey || process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY_MISSING');
   }
@@ -130,7 +172,7 @@ export async function analyzeProblemWithGemini(params: {
   // 무료 티어 RPM 절약을 위해 가장 가볍고 할당량이 넉넉한 gemini-flash-lite-latest 사용
   const targetModel = 'gemini-flash-lite-latest';
 
-  const parts: any[] = [];
+  const parts: Part[] = [];
 
   // 이미지 첨부 시
   if (params.imageBase64 && params.imageMimeType) {
@@ -144,7 +186,16 @@ export async function analyzeProblemWithGemini(params: {
   }
 
   // 텍스트 프롬프트
-  let promptText = strategy.buildPrompt(params.userContext || '');
+  let promptText = `${strategy.buildPrompt(params.userContext || '')}
+
+학습 설계 지침:
+- 학습자가 정답을 보기 전에 문제를 자기 말로 파악하도록 problemBreakdown에 핵심 요약, 주어진 조건(givens), 구할 것(target)을 분리해 적으세요.
+- conceptReference에는 문제 해결에 필요한 정확한 공식·문법·법칙 하나 이상을 이름, 성립 조건이 포함된 원문 진술, 이 문제에 적용하는 이유로 작성하세요. 과목에 맞는 교육과정 수준 표현을 사용하세요.
+- 출처가 검증되지 않았으면 URL이나 책 쪽수를 꾸며내지 마세요. 교과서 단원이나 잘 알려진 규칙명처럼 확실한 범위만 source에 쓰세요.
+- 힌트는 점진적으로 제공하며 첫 힌트에서 정답/계산 결과를 노출하지 마세요. 전체 풀이의 각 단계는 직전 단계에서 다음 단계로 가는 이유를 설명하고, 수학/과학은 대입부터 계산까지 식을 빠뜨리지 마세요.
+- 모든 수식은 KaTeX 호환 LaTeX로 작성하고, 문장 안 수식은 반드시 $...$로 감싸세요. 특히 함수 합성은 $(g \\circ f)(x)$ 형식으로 정확히 표기하세요. SVG 내부 텍스트 라벨에는 LaTeX 명령을 넣지 말고 기호를 직접 쓰세요.
+- 필요한 경우에만 visualGuide의 SVG 또는 표를 만드세요. 웹 사진 URL을 추측해서 만들지 마세요.
+`;
   if (params.problemText) {
     promptText += `\n\n[사용자가 입력한 문제 텍스트]:\n${params.problemText}`;
   }
@@ -171,16 +222,17 @@ export async function analyzeProblemWithGemini(params: {
 
     const rawJson = JSON.parse(responseText);
     return strategy.parseResult(rawJson);
-  } catch (error: any) {
-    console.error(`[Gemini API Error] model=${targetModel}:`, error?.message || error);
+  } catch (error: unknown) {
+    const apiError = error as { status?: number; code?: number; message?: string };
+    console.error(`[Gemini API Error] model=${targetModel}:`, apiError?.message || error);
     // RPM 및 쿼터 에러 감지
     if (
-      error?.status === 429 ||
-      error?.code === 429 ||
-      error?.message?.includes('RESOURCE_EXHAUSTED') ||
-      error?.message?.includes('quota') ||
-      error?.message?.includes('high demand') ||
-      error?.status === 503
+      apiError?.status === 429 ||
+      apiError?.code === 429 ||
+      apiError?.message?.includes('RESOURCE_EXHAUSTED') ||
+      apiError?.message?.includes('quota') ||
+      apiError?.message?.includes('high demand') ||
+      apiError?.status === 503
     ) {
       throw new Error(
         '무료 API 키의 1분당 요청 한도(RPM)에 도달했습니다. 약 15~30초 후에 다시 보내기(↑) 버튼을 눌러주세요.'

@@ -3,17 +3,7 @@
 import React, { useState } from 'react';
 import { WrongNoteItem, SubjectType, MistakeReason } from '@/types/problem';
 import { MathRenderer } from './MathRenderer';
-import {
-  BookMarked,
-  Sparkles,
-  Trash2,
-  RotateCcw,
-  CheckCircle2,
-  AlertCircle,
-  Tag,
-  Filter,
-  ChevronRight,
-} from 'lucide-react';
+import { BookMarked, Trash2, RotateCcw, CheckCircle2, AlertCircle, Filter } from 'lucide-react';
 
 interface WrongNoteViewProps {
   notes: WrongNoteItem[];
@@ -22,23 +12,12 @@ interface WrongNoteViewProps {
   onSelectNoteDetail: (note: WrongNoteItem) => void;
 }
 
-export const WrongNoteView: React.FC<WrongNoteViewProps> = ({
-  notes,
-  onDeleteNote,
-  onOpenTwin,
-  onSelectNoteDetail,
-}) => {
+export const WrongNoteView: React.FC<WrongNoteViewProps> = ({ notes, onDeleteNote, onOpenTwin, onSelectNoteDetail }) => {
   const [filterSubject, setFilterSubject] = useState<SubjectType | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'mastered' | 'unsolved'>('all');
-
   const reasonLabels: Record<MistakeReason, string> = {
-    calculation: '계산 실수',
-    concept: '개념 미숙지',
-    reading: '조건 오독',
-    time: '시간 부족',
-    other: '기타',
+    calculation: '계산 실수', concept: '개념 미숙지', reading: '조건 오독', time: '시간 부족', other: '기타',
   };
-
   const filteredNotes = notes.filter((item) => {
     if (filterSubject !== 'all' && item.subject !== filterSubject) return false;
     if (filterStatus === 'mastered' && item.status !== 'mastered') return false;
@@ -47,182 +26,67 @@ export const WrongNoteView: React.FC<WrongNoteViewProps> = ({
   });
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-200">
-      {/* 헤더 및 통계 */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
-              <BookMarked className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-extrabold text-base text-slate-900">
-                스마트 오답노트 보관함
-              </h3>
-              <p className="text-xs text-slate-500">
-                틀린 문제의 쌍둥이 변형 문제를 풀어 100% 완전 학습을 달성하세요.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="px-3.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-center">
-              <span className="text-[10px] text-slate-400 block font-semibold">총 오답</span>
-              <span className="text-sm font-black text-slate-800">{notes.length}개</span>
-            </div>
-            <div className="px-3.5 py-1.5 bg-emerald-50 border border-emerald-100 rounded-xl text-center">
-              <span className="text-[10px] text-emerald-600 block font-semibold">마스터 완료</span>
-              <span className="text-sm font-black text-emerald-700">
-                {notes.filter((n) => n.status === 'mastered').length}개
-              </span>
-            </div>
+    <div className="mx-auto max-w-2xl space-y-4 pb-6">
+      <section className="space-y-4 rounded-2xl border border-slate-300 bg-white p-4">
+        <div className="flex items-center gap-3">
+          <BookMarked className="h-6 w-6 shrink-0 text-slate-900" />
+          <div className="min-w-0">
+            <h1 className="text-xl font-extrabold text-slate-900">오답노트</h1>
+            <p className="mt-1 text-sm leading-5 text-slate-700">저장한 문제를 단계별로 다시 풀어보세요.</p>
           </div>
         </div>
 
-        {/* 필터 칩 */}
-        <div className="mt-5 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-          {/* 과목 필터 */}
-          <div className="flex items-center gap-1.5">
-            <Filter className="w-3.5 h-3.5 text-slate-400 mr-1" />
-            <span className="text-slate-500 font-semibold">과목:</span>
-            {(['all', 'math', 'english', 'science'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setFilterSubject(s)}
-                className={`px-2.5 py-1 rounded-lg font-semibold transition ${
-                  filterSubject === s
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              >
-                {s === 'all' ? '전체' : s === 'math' ? '수학' : s === 'english' ? '영어' : '과학'}
-              </button>
-            ))}
-          </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl border border-slate-300 px-3 py-2"><span className="block text-xs text-slate-600">저장한 문제</span><strong className="text-lg text-slate-900">{notes.length}개</strong></div>
+          <div className="rounded-xl border border-slate-300 px-3 py-2"><span className="block text-xs text-slate-600">마스터 완료</span><strong className="text-lg text-slate-900">{notes.filter((note) => note.status === 'mastered').length}개</strong></div>
+        </div>
 
-          {/* 마스터 상태 필터 */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-slate-500 font-semibold">상태:</span>
-            <button
-              onClick={() => setFilterStatus('all')}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition ${
-                filterStatus === 'all' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              전체
-            </button>
-            <button
-              onClick={() => setFilterStatus('mastered')}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition ${
-                filterStatus === 'mastered' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              🏆 마스터
-            </button>
-            <button
-              onClick={() => setFilterStatus('unsolved')}
-              className={`px-2.5 py-1 rounded-lg font-semibold transition ${
-                filterStatus === 'unsolved' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              미완료
-            </button>
+        <div className="space-y-3 border-t border-slate-300 pt-3">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700"><Filter className="h-4 w-4"/>과목</div>
+            <div className="grid grid-cols-4 gap-2">
+              {(['all', 'math', 'english', 'science'] as const).map((subject) => <button key={subject} onClick={() => setFilterSubject(subject)} aria-pressed={filterSubject === subject} className={`min-h-11 rounded-xl border px-2 text-sm font-bold ${filterSubject === subject ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-800'}`}>{subject === 'all' ? '전체' : subject === 'math' ? '수학' : subject === 'english' ? '영어' : '과학'}</button>)}
+            </div>
+          </div>
+          <div>
+            <div className="mb-2 text-sm font-bold text-slate-700">진행 상태</div>
+            <div className="grid grid-cols-3 gap-2">
+              {([['all', '전체'], ['mastered', '마스터'], ['unsolved', '복습 필요']] as const).map(([status, label]) => <button key={status} onClick={() => setFilterStatus(status)} aria-pressed={filterStatus === status} className={`min-h-11 rounded-xl border px-2 text-sm font-bold ${filterStatus === status ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-300 bg-white text-slate-800'}`}>{label}</button>)}
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* 오답노트 카드 리스트 */}
       {filteredNotes.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-dashed border-slate-200 p-12 text-center space-y-2">
-          <BookMarked className="w-10 h-10 text-slate-300 mx-auto" />
-          <h4 className="font-bold text-sm text-slate-700">해당 조건의 오답 문제가 없습니다</h4>
-          <p className="text-xs text-slate-400">
-            문제를 스캔하고 학습하면 여기에 자동으로 누적됩니다.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredNotes.map((note) => (
-            <div
-              key={note.id}
-              className={`bg-white rounded-2xl border p-5 transition shadow-xs hover:shadow-md ${
-                note.status === 'mastered'
-                  ? 'border-emerald-200 bg-emerald-50/20'
-                  : 'border-slate-200'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2 mb-2.5">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${
-                      note.subject === 'math'
-                        ? 'bg-blue-100 text-blue-700'
-                        : note.subject === 'english'
-                        ? 'bg-emerald-100 text-emerald-700'
-                        : 'bg-purple-100 text-purple-700'
-                    }`}
-                  >
-                    {note.subject === 'math' ? '수학' : note.subject === 'english' ? '영어' : '과학'}
-                  </span>
-                  <span className="font-bold text-xs text-slate-700">{note.topic}</span>
-                  {note.mistakeReason && (
-                    <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">
-                      {reasonLabels[note.mistakeReason]}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {note.status === 'mastered' ? (
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5" /> 마스터 완료 🏆
-                    </span>
-                  ) : (
-                    <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                      <AlertCircle className="w-3.5 h-3.5" /> 복습 필요
-                    </span>
-                  )}
-                  <button
-                    onClick={() => onDeleteNote(note.id)}
-                    className="text-slate-400 hover:text-rose-600 p-1 transition"
-                    title="오답노트에서 삭제"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
+        <section className="rounded-2xl border border-dashed border-slate-400 bg-white px-5 py-10 text-center">
+          <BookMarked className="mx-auto h-9 w-9 text-slate-700" />
+          <h2 className="mt-3 text-base font-bold text-slate-900">조건에 맞는 오답 문제가 없어요</h2>
+          <p className="mt-1 text-sm text-slate-700">문제를 풀고 오답노트에 저장하면 여기에 모입니다.</p>
+        </section>
+      ) : <div className="space-y-3">
+        {filteredNotes.map((note) => <article key={note.id} className="space-y-3 rounded-2xl border border-slate-300 bg-white p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-md border border-slate-400 px-2 py-1 text-xs font-bold text-slate-900">{note.subject === 'math' ? '수학' : note.subject === 'english' ? '영어' : '과학'}</span>
+                {note.mistakeReason && <span className="text-sm text-slate-700">{reasonLabels[note.mistakeReason]}</span>}
               </div>
-
-              {/* 문제 본문 */}
-              <div className="text-sm text-slate-800 line-clamp-2 font-medium bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <MathRenderer content={note.extractedText} />
-              </div>
-
-              {/* 하단 액션 버튼 */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs text-slate-500 font-medium">
-                  정답: <strong className="font-mono text-blue-600">{note.fullSolution.finalAnswer}</strong>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => onSelectNoteDetail(note)}
-                    className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-semibold transition"
-                  >
-                    상세 풀이 보기
-                  </button>
-                  <button
-                    onClick={() => onOpenTwin(note)}
-                    className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition flex items-center gap-1.5"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>🔄 쌍둥이 변형 문제 풀기</span>
-                  </button>
-                </div>
-              </div>
+              <h2 className="break-words text-base font-bold leading-6 text-slate-900">{note.topic}</h2>
             </div>
-          ))}
-        </div>
-      )}
+            <button onClick={() => onDeleteNote(note.id)} aria-label="오답노트에서 삭제" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-300 text-slate-800"><Trash2 className="h-5 w-5"/></button>
+          </div>
+
+          <div className="rounded-xl border border-slate-300 p-3 text-base leading-6 text-slate-900"><MathRenderer content={note.extractedText} /></div>
+          <div className="flex items-center justify-between gap-3 text-sm text-slate-700">
+            <span className="min-w-0 truncate">정답: <strong className="font-mono text-slate-900">{note.fullSolution.finalAnswer}</strong></span>
+            <span className="flex shrink-0 items-center gap-1 font-semibold">{note.status === 'mastered' ? <><CheckCircle2 className="h-4 w-4"/>마스터</> : <><AlertCircle className="h-4 w-4"/>복습 필요</>}</span>
+          </div>
+          <div className="grid grid-cols-1 gap-2 border-t border-slate-300 pt-3 sm:grid-cols-2">
+            <button onClick={() => onSelectNoteDetail(note)} className="min-h-12 rounded-xl border border-slate-900 bg-slate-900 px-3 text-base font-bold text-white">단계별로 다시 풀기</button>
+            <button onClick={() => onOpenTwin(note)} className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-400 bg-white px-3 text-base font-bold text-slate-900"><RotateCcw className="h-5 w-5"/>비슷한 문제 연습</button>
+          </div>
+        </article>)}
+      </div>}
     </div>
   );
 };

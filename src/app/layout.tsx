@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Solvify (튜터스캔) - AI 기반 스마트 문제 풀이 보조 & 오답노트',
+  title: 'tudu - AI 문제 풀이와 오답노트',
   description: '즉시 정답 대신 3단계 소크라테스식 힌트와 쌍둥이 변형 문제로 완전 학습을 달성하는 AI 튜터 서비스',
 };
 

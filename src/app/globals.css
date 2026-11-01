@@ -20,8 +20,54 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
+button,
+summary {
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+summary:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 2px;
+}
+
 .katex-display {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0.5rem 0;
+}
+
+.success-glow-first {
+  animation: solvify-success-first 3.2s ease-in-out both;
+}
+
+.success-glow-subject {
+  animation: solvify-success-subject 2s ease-in-out both;
+}
+
+@keyframes solvify-success-first {
+  0%, 100% { text-shadow: 0 0 0 transparent; }
+  10% { text-shadow: 0 0 3px #09907866, 0 0 8px #09907855; }
+  22%, 30% { text-shadow: 0 0 5px #099078, 0 0 16px #099078bb; }
+  42% { text-shadow: 0 0 2px #09907855, 0 0 6px #09907844; }
+  52% { text-shadow: 0 0 3px color-mix(in srgb, var(--success-glow-color), transparent 40%); }
+  64%, 72% { text-shadow: 0 0 5px var(--success-glow-color), 0 0 18px color-mix(in srgb, var(--success-glow-color), transparent 15%); }
+  86% { text-shadow: 0 0 2px color-mix(in srgb, var(--success-glow-color), transparent 65%); }
+}
+
+@keyframes solvify-success-subject {
+  0%, 100% { text-shadow: 0 0 0 transparent; }
+  15% { text-shadow: 0 0 3px color-mix(in srgb, var(--success-glow-color), transparent 55%); }
+  32%, 52% { text-shadow: 0 0 6px var(--success-glow-color), 0 0 20px color-mix(in srgb, var(--success-glow-color), transparent 20%); }
+  78% { text-shadow: 0 0 2px color-mix(in srgb, var(--success-glow-color), transparent 70%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .success-glow-first,
+  .success-glow-subject {
+    animation-duration: 0.01ms;
+  }
 }

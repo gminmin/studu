@@ -17,7 +17,7 @@ export interface SolutionStep {
 }
 
 export interface EnglishGuide {
-  slashReading: string; // "Because the weather was cold, / she wore a thick jacket / to stay warm."
+  slashReading: string;
   vocabulary: Array<{
     word: string;
     meaning: string;
@@ -34,6 +34,19 @@ export interface ScienceGuide {
   }>;
   appliedLaw: string;
   corePrinciple?: string;
+}
+
+export interface VisualGuide {
+  type: 'geometry' | 'graph' | 'table' | 'diagram' | 'none';
+  title?: string;
+  // AI가 생성한 반응형 SVG 코드 (<svg viewBox="0 0 320 200" ...>...</svg>)
+  svgContent?: string;
+  // 표 데이터 (물리량, 상태 변화, 수열 등)
+  tableData?: {
+    headers: string[];
+    rows: string[][];
+  };
+  caption?: string;
 }
 
 export interface TwinProblem {
@@ -53,6 +66,18 @@ export interface StandardProblemResponse {
     finalAnswer: string;
   };
   twinProblem: TwinProblem;
+  problemBreakdown?: {
+    summary: string;
+    givens: Array<{ label: string; value: string }>;
+    target: string;
+  };
+  conceptReference?: {
+    name: string;
+    statement: string;
+    application: string;
+    source?: string;
+  };
+  visualGuide?: VisualGuide;
   englishGuide?: EnglishGuide;
   scienceGuide?: ScienceGuide;
 }
@@ -71,6 +96,9 @@ export interface WrongNoteItem {
     finalAnswer: string;
   };
   twinProblem: TwinProblem;
+  problemBreakdown?: StandardProblemResponse['problemBreakdown'];
+  conceptReference?: StandardProblemResponse['conceptReference'];
+  visualGuide?: VisualGuide;
   englishGuide?: EnglishGuide;
   scienceGuide?: ScienceGuide;
   status: 'unsolved' | 'solved_alone' | 'viewed_solution' | 'mastered';

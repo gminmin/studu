@@ -23,7 +23,7 @@ export class EnglishStrategy implements SubjectStrategy {
   }
 
   buildPrompt(userContext: string): string {
-    return `제공된 이미지 또는 텍스트의 영어 문제를 분석해주세요.
+    return `제공된 이미지 또는 텍스트의 영어 문제를 분석해주세요. 정답 근거가 되는 문장/구절을 먼저 특정하고, 관련 어휘·문법 규칙과 문맥의 연결을 단계별로 설명해주세요. 보기형 문제라면 각 선택지를 판별하는 근거를 명시해주세요.
 ${userContext ? `추가 사용자 메모: ${userContext}` : ''}
 반드시 지정된 JSON 스키마 규격으로 응답하세요.`;
   }
@@ -35,11 +35,14 @@ ${userContext ? `추가 사용자 메모: ${userContext}` : ''}
       extractedText: rawJson.extractedText || '',
       hints: Array.isArray(rawJson.hints) ? rawJson.hints : [],
       fullSolution: rawJson.fullSolution || { steps: [], finalAnswer: '' },
+      problemBreakdown: rawJson.problemBreakdown,
+      conceptReference: rawJson.conceptReference,
       twinProblem: rawJson.twinProblem || {
         question: '유사한 변형 문제입니다.',
         correctAnswer: '',
         explanation: '',
       },
+      visualGuide: rawJson.visualGuide,
       englishGuide: rawJson.englishGuide,
     };
   }

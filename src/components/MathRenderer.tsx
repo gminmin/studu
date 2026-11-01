@@ -17,22 +17,26 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
   const renderedContent = useMemo(() => {
     if (!content) return '';
 
+    // JSON의 \b 이스케이프가 잘못된 LaTeX 백슬래시와 합쳐진 경우 복구합니다.
+    // 예: y=(g [backspace]igcirc f)(x) -> y=(g \bigcirc f)(x)
+    const normalizedContent = content.replace(/\u0008(?=igcirc\b)/g, '\\');
+
     // 블록 전체가 수식인 경우
     if (block) {
       try {
-        return katex.renderToString(content.replace(/^\$\$|\$\$$/g, '').trim(), {
+        return katex.renderToString(normalizedContent.replace(/^\$\$|\$\$$/g, '').trim(), {
           displayMode: true,
           throwOnError: false,
         });
       } catch {
-        return content;
+        return normalizedContent;
       }
     }
 
     // 텍스트 내 $...$ 및 $$...$$ 파싱
     try {
       // 먼저 $$...$$ 블록 수식 치환
-      let result = content.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
+      let result = normalizedContent.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => {
         try {
           return katex.renderToString(math.trim(), { displayMode: true, throwOnError: false });
         } catch {
@@ -49,9 +53,16 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
         }
       });
 
+      // 모델이 합성함수 표기를 LaTeX 구분자 없이 반환해도 수식으로 렌더링합니다.
+      if (!result.includes('$') && /\\(?:bigcirc|circ)|∘/.test(result)) {
+        result = result.replace(/(\by\s*=\s*\(?\s*[A-Za-z]\s*(?:\\bigcirc|\\circ|∘)\s*[A-Za-z]\s*\)?\s*\(\s*x\s*\))/g, (_, expression) =>
+          katex.renderToString(expression.replace(/\\bigcirc/g, '\\circ'), { displayMode: false, throwOnError: false })
+        );
+      }
+
       return result;
     } catch {
-      return content;
+      return normalizedContent;
     }
   }, [content, block]);
 

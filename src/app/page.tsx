@@ -2,6 +2,15 @@
 
 import React, { useState, useEffect } from 'react';
 import {
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  getRedirectResult,
+  signInWithPopup,
+  signInWithRedirect,
+  signOut,
+  type User,
+} from 'firebase/auth';
+import {
   SubjectType,
   AIModelMode,
   StandardProblemResponse,
@@ -10,17 +19,18 @@ import {
 } from '@/types/problem';
 import { Header } from '@/components/Header';
 import { MobileScanView } from '@/components/MobileScanView';
-import { HintLadderView } from '@/components/HintLadderView';
-import { SolutionView } from '@/components/SolutionView';
+import { LearningFlowView } from '@/components/LearningFlowView';
 import { WrongNoteView } from '@/components/WrongNoteView';
 import { TwinProblemModal } from '@/components/TwinProblemModal';
-import { ApiKeyModal } from '@/components/ApiKeyModal';
+import { AccountModal } from '@/components/AccountModal';
+import { auth, firebaseConfigured } from '@/lib/firebase/client';
 import { WifiOff } from 'lucide-react';
 
 type AppStep = 'scan' | 'hints' | 'solution';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'scan' | 'wrongNote'>('scan');
+  const [learningReturnTab, setLearningReturnTab] = useState<'scan' | 'wrongNote'>('scan');
   const [currentStep, setCurrentStep] = useState<AppStep>('scan');
   const [currentSubject, setCurrentSubject] = useState<SubjectType>('math');
   const [modelMode, setModelMode] = useState<AIModelMode>('speed');
@@ -35,7 +45,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // 모달 상태
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState<boolean>(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState<boolean>(false);
   const [isTwinModalOpen, setIsTwinModalOpen] = useState<boolean>(false);
   const [activeTwinProblem, setActiveTwinProblem] = useState<{
     problem: StandardProblemResponse['twinProblem'];
@@ -43,8 +53,10 @@ export default function Home() {
     noteId?: string;
   } | null>(null);
 
-  // BYOK 커스텀 키 상태
-  const [customApiKey, setCustomApiKey] = useState<string>('');
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [isAuthActionLoading, setIsAuthActionLoading] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // 오답노트 상태
   const [wrongNotes, setWrongNotes] = useState<WrongNoteItem[]>([]);
@@ -61,7 +73,7 @@ export default function Home() {
     };
 
     if (typeof window !== 'undefined') {
-      setIsOffline(!navigator.onLine);
+      queueMicrotask(() => setIsOffline(!navigator.onLine));
       window.addEventListener('online', handleOnline);
       window.addEventListener('offline', handleOffline);
     }
@@ -74,18 +86,78 @@ export default function Home() {
 
   // 로컬 스토리지 로드
   useEffect(() => {
-    const savedKey = localStorage.getItem('gemini_custom_api_key') || '';
-    setCustomApiKey(savedKey);
-
+    localStorage.removeItem('gemini_custom_api_key');
     const savedNotes = localStorage.getItem('solvify_wrong_notes');
     if (savedNotes) {
       try {
-        setWrongNotes(JSON.parse(savedNotes));
+        const parsedNotes = JSON.parse(savedNotes) as WrongNoteItem[];
+        queueMicrotask(() => setWrongNotes(parsedNotes));
       } catch (e) {
         console.warn('Failed to parse saved notes', e);
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (!auth) {
+      queueMicrotask(() => setIsAuthLoading(false));
+      return;
+    }
+
+    let active = true;
+    getRedirectResult(auth).catch((error: unknown) => {
+      if (active) setAuthError(getAuthErrorMessage(error));
+    });
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      if (!active) return;
+      setUser(nextUser);
+      setIsAuthLoading(false);
+    }, () => {
+      if (active) {
+        setUser(null);
+        setIsAuthLoading(false);
+        setAuthError('로그인 상태를 확인하지 못했어요. 다시 시도해주세요.');
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const handleSignIn = async () => {
+    if (!auth) return;
+    setAuthError(null);
+    setIsAuthActionLoading(true);
+    const provider = new GoogleAuthProvider();
+    try {
+      if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
+        await signInWithRedirect(auth, provider);
+        return;
+      }
+      await signInWithPopup(auth, provider);
+      setIsAccountModalOpen(false);
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+    } finally {
+      setIsAuthActionLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (!auth) return;
+    setIsAuthActionLoading(true);
+    setAuthError(null);
+    try {
+      await signOut(auth);
+      setIsAccountModalOpen(false);
+    } catch {
+      setAuthError('로그아웃하지 못했어요. 다시 시도해주세요.');
+    } finally {
+      setIsAuthActionLoading(false);
+    }
+  };
 
   const saveWrongNotes = (updated: WrongNoteItem[]) => {
     setWrongNotes(updated);
@@ -98,7 +170,14 @@ export default function Home() {
     problemText?: string;
     userContext?: string;
   }) => {
+    setLearningReturnTab('scan');
     setNetworkErrorMsg(null);
+
+    if (!user) {
+      setAuthError('문제를 분석하려면 Google 계정으로 로그인해주세요.');
+      setIsAccountModalOpen(true);
+      return;
+    }
 
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       setIsOffline(true);
@@ -114,7 +193,7 @@ export default function Home() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(customApiKey ? { 'x-gemini-api-key': customApiKey } : {}),
+          ...(user ? { Authorization: `Bearer ${await user.getIdToken()}` } : {}),
         },
         body: JSON.stringify({
           subject: currentSubject,
@@ -134,12 +213,13 @@ export default function Home() {
       setProblemData(data);
       setIsSolvedAlone(false);
       setCurrentStep('hints');
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const error = err as { name?: string; message?: string };
       console.error('Analysis error:', err);
       const isFetchNetworkError =
-        err?.name === 'TypeError' ||
-        err?.message?.includes('Failed to fetch') ||
-        err?.message?.includes('NetworkError');
+        error?.name === 'TypeError' ||
+        error?.message?.includes('Failed to fetch') ||
+        error?.message?.includes('NetworkError');
 
       if (isFetchNetworkError || (typeof navigator !== 'undefined' && !navigator.onLine)) {
         setIsOffline(true);
@@ -147,7 +227,7 @@ export default function Home() {
         setNetworkErrorMsg(msg);
         alert(msg);
       } else {
-        alert(err.message || '문제 분석 중 오류가 발생했습니다.');
+        alert(error.message || '문제 분석 중 오류가 발생했습니다.');
       }
     } finally {
       setIsLoading(false);
@@ -156,10 +236,6 @@ export default function Home() {
 
   const handleSolveAlone = () => {
     setIsSolvedAlone(true);
-  };
-
-  const handleGiveUp = () => {
-    setCurrentStep('solution');
   };
 
   const handleSaveToWrongNote = (reason: MistakeReason) => {
@@ -225,10 +301,11 @@ export default function Home() {
   };
 
   const handleSelectNoteDetail = (note: WrongNoteItem) => {
+    setLearningReturnTab('wrongNote');
     setProblemData(note);
     setCurrentSubject(note.subject);
     setIsSolvedAlone(note.status === 'solved_alone');
-    setCurrentStep('solution');
+    setCurrentStep('hints');
     setActiveTab('scan');
   };
 
@@ -237,18 +314,25 @@ export default function Home() {
     saveWrongNotes(updated);
   };
 
+  const handleExitLearning = () => {
+    setCurrentStep('scan');
+    setActiveTab(learningReturnTab);
+  };
+
+  const isLearning = activeTab === 'scan' && (currentStep === 'hints' || currentStep === 'solution') && Boolean(problemData);
+
   return (
-    <div className="fixed inset-0 w-full h-dvh flex flex-col bg-slate-100 text-slate-900 overflow-hidden">
+      <div className="fixed inset-0 flex h-dvh w-full flex-col overflow-hidden bg-white text-slate-900">
       {/* ⚠️ 네트워크 연결 끊김 글로벌 알림 배너 */}
       {(isOffline || networkErrorMsg) && (
-        <div className="bg-rose-600 text-white px-4 py-2 text-xs font-bold text-center flex items-center justify-center gap-2 shadow-sm shrink-0 z-50 animate-in slide-in-from-top">
+        <div className="z-50 flex shrink-0 items-center justify-center gap-2 border-b border-slate-900 bg-slate-900 px-4 py-2 text-center text-sm font-bold text-white">
           <WifiOff className="w-3.5 h-3.5 shrink-0" />
           <span>{networkErrorMsg || '네트워크가 연결되지 않았습니다. 인터넷 연결을 확인해주세요.'}</span>
         </div>
       )}
 
       {/* 모바일 상단 미니 바 */}
-      <Header
+      {!isLearning && <Header
         activeTab={activeTab}
         onTabChange={(tab) => {
           setActiveTab(tab);
@@ -257,12 +341,17 @@ export default function Home() {
           }
         }}
         wrongNoteCount={wrongNotes.length}
-      />
+        user={user}
+        onOpenAccount={() => {
+          setAuthError(null);
+          setIsAccountModalOpen(true);
+        }}
+      />}
 
       {/* 메인 뷰포트 영역 (전체 화면 높이 꽉 차게) */}
-      <main className="flex-1 relative w-full h-full overflow-hidden flex flex-col">
+      <main className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
         {activeTab === 'scan' && (
-          <div className="w-full h-full flex-1 relative">
+          <div className="relative min-h-0 w-full flex-1">
             {currentStep === 'scan' && (
               <MobileScanView
                 currentSubject={currentSubject}
@@ -275,25 +364,14 @@ export default function Home() {
               />
             )}
 
-            {currentStep === 'hints' && problemData && (
-              <div className="w-full h-full overflow-y-auto p-4 max-w-md mx-auto">
-                <HintLadderView
+            {(currentStep === 'hints' || currentStep === 'solution') && problemData && (
+              <div className="h-full w-full overflow-hidden">
+                <LearningFlowView
                   data={problemData}
                   onSolveAlone={handleSolveAlone}
-                  onGiveUp={handleGiveUp}
-                  onReScan={() => setCurrentStep('scan')}
-                />
-              </div>
-            )}
-
-            {currentStep === 'solution' && problemData && (
-              <div className="w-full h-full overflow-y-auto p-4 max-w-md mx-auto">
-                <SolutionView
-                  data={problemData}
-                  isSolvedAlone={isSolvedAlone}
+                  onSaveToWrongNote={() => handleSaveToWrongNote('concept')}
                   onOpenTwinProblem={handleOpenCurrentTwinProblem}
-                  onSaveToWrongNote={handleSaveToWrongNote}
-                  onBackToScan={() => setCurrentStep('scan')}
+                  onExit={handleExitLearning}
                 />
               </div>
             )}
@@ -302,7 +380,7 @@ export default function Home() {
 
         {/* 오답노트 보관함 */}
         {activeTab === 'wrongNote' && (
-          <div className="w-full h-full overflow-y-auto p-4 max-w-md mx-auto">
+          <div className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:p-4">
             <WrongNoteView
               notes={wrongNotes}
               onDeleteNote={handleDeleteNote}
@@ -313,11 +391,15 @@ export default function Home() {
         )}
       </main>
 
-      {/* 모달 1: Gemini API Key 설정 */}
-      <ApiKeyModal
-        isOpen={isApiKeyModalOpen}
-        onClose={() => setIsApiKeyModalOpen(false)}
-        onSaved={setCustomApiKey}
+      <AccountModal
+        isOpen={isAccountModalOpen}
+        user={user}
+        isLoading={isAuthLoading || isAuthActionLoading}
+        error={authError}
+        isConfigured={firebaseConfigured}
+        onClose={() => setIsAccountModalOpen(false)}
+        onSignIn={handleSignIn}
+        onSignOut={handleSignOut}
       />
 
       {/* 모달 2: 쌍둥이 변형 문제 (Twin Problem) */}
@@ -332,4 +414,21 @@ export default function Home() {
       )}
     </div>
   );
+}
+
+function getAuthErrorMessage(error: unknown): string {
+  const code = (error as { code?: string })?.code;
+  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+    return '로그인을 취소했어요.';
+  }
+  if (code === 'auth/popup-blocked') {
+    return '브라우저가 로그인 창을 차단했어요. 다시 시도해주세요.';
+  }
+  if (code === 'auth/unauthorized-domain') {
+    return '이 도메인은 Firebase 로그인에 등록되지 않았어요. Firebase 승인 도메인을 확인해주세요.';
+  }
+  if (code === 'auth/account-exists-with-different-credential') {
+    return '이 이메일은 다른 로그인 방식으로 가입되어 있어요.';
+  }
+  return 'Google 로그인에 실패했어요. 잠시 후 다시 시도해주세요.';
 }

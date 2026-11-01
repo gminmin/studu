@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { SubjectType, AIModelMode } from '@/types/problem';
+import { SUBJECT_THEME } from '@/lib/subjects/theme';
 import {
   Camera,
   Plus,
@@ -49,17 +50,18 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [imageMime, setImageMime] = useState<string>('image/jpeg');
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean>(true);
+  const subjectTheme = SUBJECT_THEME[currentSubject];
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // 기본 과목 3종 (수학, 영어, 과학)
-  const subjects: Array<{ id: SubjectType; icon: React.ReactNode; label: string }> = [
+  const subjects = useMemo<Array<{ id: SubjectType; icon: React.ReactNode; label: string }>>(() => [
     { id: 'math', icon: <Calculator className="w-5 h-5" />, label: '수학' },
     { id: 'english', icon: <BookOpen className="w-5 h-5" />, label: '영어' },
     { id: 'science', icon: <Atom className="w-5 h-5" />, label: '과학' },
-  ];
+  ], []);
 
   // ⭐️ 끊김 없는 무한 스크롤을 위한 가상 연속 인덱스 (기본 중간값 300에서 시작)
   const ITEM_HEIGHT = 40; // 각 과목 아이템 높이 (px)
@@ -239,7 +241,7 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
   });
 
   return (
-    <div className="relative w-full h-[calc(100dvh-50px)] bg-slate-900 overflow-hidden flex flex-col justify-between select-none">
+    <div className="relative flex h-full min-h-0 w-full select-none flex-col justify-between overflow-hidden bg-slate-900">
       <input
         ref={fileInputRef}
         type="file"
@@ -262,9 +264,9 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
             />
             <button
               onClick={handleRetake}
-              className="absolute top-4 left-4 z-20 px-3 py-1.5 bg-white/90 backdrop-blur-md text-slate-800 text-xs font-bold rounded-full flex items-center gap-1.5 border border-slate-200 shadow-md active:scale-95 transition"
+              className="absolute left-4 top-4 z-20 flex min-h-12 items-center gap-2 rounded-xl border border-slate-900 bg-white px-4 text-sm font-bold text-slate-900 active:opacity-75"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-[#099078]" />
+              <RotateCcw className="h-5 w-5 text-slate-900" />
               <span>다시 찍기</span>
             </button>
           </div>
@@ -279,10 +281,10 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
         ) : (
           <div className="text-center p-6 text-slate-400 space-y-3">
             <Camera className="w-12 h-12 mx-auto text-slate-500" />
-            <p className="text-xs">카메라를 켤 수 없습니다.</p>
+            <p className="text-base">카메라를 켤 수 없습니다.</p>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 bg-[#099078] text-white text-xs font-bold rounded-xl active:scale-95 transition shadow-sm"
+              className="min-h-12 rounded-xl border border-white bg-white px-4 text-base font-bold text-slate-900 active:opacity-80"
             >
               갤러리 사진 불러오기
             </button>
@@ -293,17 +295,17 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
         {!capturedImage && (
           <div className="pointer-events-none absolute inset-x-8 top-16 bottom-32 border-2 border-white/30 rounded-2xl flex flex-col justify-between p-3">
             <div className="flex justify-between">
-              <div className="w-6 h-6 border-t-3 border-l-3 border-[#099078] rounded-tl-lg shadow-xs" />
-              <div className="w-6 h-6 border-t-3 border-r-3 border-[#099078] rounded-tr-lg shadow-xs" />
+              <div className="w-6 h-6 rounded-tl-lg border-l-3 border-t-3 border-white" />
+              <div className="w-6 h-6 rounded-tr-lg border-r-3 border-t-3 border-white" />
             </div>
             <div className="text-center">
-              <span className="text-[11px] font-bold text-slate-800 bg-white/90 px-3 py-1 rounded-full shadow-md backdrop-blur-xs">
+              <span className="rounded-lg border border-slate-900 bg-white px-3 py-2 text-sm font-bold text-slate-900">
                 문제를 가이드 박스 안에 맞춰주세요
               </span>
             </div>
             <div className="flex justify-between">
-              <div className="w-6 h-6 border-b-3 border-l-3 border-[#099078] rounded-bl-lg shadow-xs" />
-              <div className="w-6 h-6 border-b-3 border-r-3 border-[#099078] rounded-br-lg shadow-xs" />
+              <div className="w-6 h-6 rounded-bl-lg border-b-3 border-l-3 border-white" />
+              <div className="w-6 h-6 rounded-br-lg border-b-3 border-r-3 border-white" />
             </div>
           </div>
         )}
@@ -317,7 +319,7 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
       <div className="absolute top-4 right-4 z-30 flex items-center justify-end">
         {isHorizontalExpanded ? (
           /* [가로 확장 모드] 옆으로 촤르륵 늘어나 전체 과목 한눈에 노출 */
-          <div className="flex items-center gap-2 p-1.5 bg-white/95 backdrop-blur-xl border border-slate-200 rounded-full shadow-2xl animate-in slide-in-from-right-4 duration-300">
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-900 bg-white p-2 animate-in slide-in-from-right-4 duration-300">
             {subjects.map((sub) => {
               const isSelected = sub.id === currentSubject;
               return (
@@ -327,11 +329,12 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
                     syncVirtualIndexToSubject(sub.id);
                     setIsHorizontalExpanded(false);
                   }}
-                  className={`w-10 h-10 rounded-full flex items-center justify-center transition-all active:scale-90 ${
+                  className={`flex h-12 w-12 items-center justify-center rounded-xl border transition-colors ${
                     isSelected
-                      ? 'bg-[#099078] text-white shadow-md shadow-[#099078]/30 scale-105 ring-2 ring-[#099078]/20'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'border-slate-900'
+                      : 'border-slate-300 bg-white text-slate-800'
                   }`}
+                  style={isSelected ? { backgroundColor: subjectTheme.color, borderColor: subjectTheme.color, color: subjectTheme.foreground } : undefined}
                   title={sub.label}
                 >
                   {sub.icon}
@@ -340,7 +343,7 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
             })}
             <button
               onClick={() => setIsHorizontalExpanded(false)}
-              className="w-7 h-7 rounded-full bg-slate-100 text-slate-400 hover:text-slate-700 flex items-center justify-center ml-0.5 active:scale-90"
+              className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-800"
               title="닫기"
             >
               <X className="w-3.5 h-3.5" />
@@ -353,14 +356,10 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
             onWheel={handleWheel}
-            className="relative flex flex-col items-center justify-center p-1 rounded-full bg-white/80 backdrop-blur-md border border-white/70 shadow-xl cursor-ns-resize"
+            className="relative flex cursor-ns-resize flex-col items-center justify-center rounded-2xl border border-slate-900 bg-white p-1"
           >
             {/* 세로 슬라이드 뷰포트 (높이 120px) */}
             <div className="relative w-11 h-[120px] overflow-hidden flex items-center justify-center">
-              {/* 상하단 반투명 마스크 그라데이션 */}
-              <div className="pointer-events-none absolute top-0 inset-x-0 h-4 bg-gradient-to-b from-white/90 to-transparent z-10" />
-              <div className="pointer-events-none absolute bottom-0 inset-x-0 h-4 bg-gradient-to-t from-white/90 to-transparent z-10" />
-
               {/* ⭐️ 끊김 전혀 없는 상대 좌표 트랙 (상대 위치 기반 부드러운 translateY 롤링) */}
               <div className="relative w-full h-full flex items-center justify-center">
                 {visibleSlots.map((slot) => {
@@ -381,11 +380,12 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
                       style={{
                         transform: `translateY(${yPos}px) scale(${isCenter ? 1.08 : isAdjacent ? 0.78 : 0.5})`,
                         opacity: isCenter ? 1 : isAdjacent ? 0.45 : 0,
+                        ...(isCenter ? { borderColor: subjectTheme.color, color: subjectTheme.color } : {}),
                       }}
-                      className={`absolute w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 ease-out cursor-pointer ${
+                      className={`absolute flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-300 ease-out ${
                         isCenter
-                          ? 'bg-white text-[#099078] border-2 border-[#099078] shadow-md shadow-[#099078]/30 z-20 active:scale-95'
-                          : 'bg-white/50 text-slate-400 hover:opacity-80 z-10'
+                          ? 'z-20 border-slate-900 bg-white text-slate-900'
+                          : 'z-10 border-slate-300 bg-white text-slate-700'
                       }`}
                       title={isCenter ? '터치하여 전체 과목 펼치기' : slot.subject.label}
                     >
@@ -406,7 +406,7 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
         <div className="absolute inset-x-0 bottom-24 z-20 flex justify-center pointer-events-none">
           <button
             onClick={handleShutter}
-            className="pointer-events-auto w-16 h-16 rounded-full bg-white shadow-2xl active:scale-90 transition-transform duration-150 border-4 border-white/60"
+            className="pointer-events-auto h-16 w-16 rounded-full border-2 border-slate-900 bg-white active:scale-90"
             title="촬영하기"
             aria-label="촬영하기"
           />
@@ -419,18 +419,18 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
              - [가운데]: 누르면 위로 펼쳐지는 텍스트 입력창
              - [오른쪽]: 화살표 표시 하나만의 보내기 버튼 (ArrowUp)
          ───────────────────────────────────────────────────────────── */}
-      <div className="absolute bottom-0 inset-x-0 z-30 p-3 pb-4 bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-2xl transition-all duration-300 ease-out flex flex-col gap-2">
+      <div className="absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 border-t border-slate-900 bg-white p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] transition-all duration-300 ease-out">
         {/* (A) 입력창이 위로 올라가면서 펼쳐지는 영역 */}
         {isExpanded && (
-          <div className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3 shadow-md animate-in fade-in slide-in-from-bottom-3 duration-200">
+          <div className="w-full rounded-2xl border border-slate-400 bg-white p-3 animate-in fade-in slide-in-from-bottom-3 duration-200">
             <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-slate-200">
-              <span className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-[#099078]" />
+              <span className="flex items-center gap-1 text-sm font-bold text-slate-700">
+                <span className="h-2 w-2 rounded-full bg-slate-900" />
                 문제 지문 또는 질문 입력
               </span>
               <button
                 onClick={() => setIsExpanded(false)}
-                className="text-slate-400 hover:text-slate-700 p-0.5 rounded-md"
+                className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-300 text-slate-800"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -441,7 +441,7 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
               value={problemText}
               onChange={(e) => setProblemText(e.target.value)}
               placeholder="직접 문제 지문이나 모르는 부분을 적어주세요..."
-              className="w-full text-xs bg-transparent text-slate-800 placeholder:text-slate-400 focus:outline-hidden resize-none leading-relaxed"
+              className="w-full resize-none bg-transparent text-base leading-7 text-slate-900 placeholder:text-slate-600 focus:outline-hidden"
             />
           </div>
         )}
@@ -453,10 +453,10 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
             {/* ⭐️ 직관적인 원형 (+) 사진/파일 첨부 버튼 */}
             <button
               onClick={() => fileInputRef.current?.click()}
-              className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all active:scale-90 shadow-xs ${
+              className={`flex h-12 w-12 items-center justify-center rounded-xl border-2 transition-colors ${
                 capturedImage
-                  ? 'bg-[#099078] border-[#099078] text-white ring-2 ring-[#099078]/20'
-                  : 'bg-white border-slate-300 text-[#099078] hover:border-[#099078] hover:bg-[#099078]/5'
+                  ? 'border-slate-900 bg-slate-900 text-white'
+                  : 'border-slate-400 bg-white text-slate-900'
               }`}
               title="사진 / 파일 첨부 (+)"
             >
@@ -466,7 +466,7 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
             {/* ⭐️ 무채색 모델 변경 버튼 */}
             <button
               onClick={() => onModelModeChange(modelMode === 'speed' ? 'deep' : 'speed')}
-              className="h-10 px-3.5 rounded-2xl border border-slate-300 bg-white text-slate-800 text-xs font-extrabold hover:bg-slate-50 active:scale-95 transition shadow-2xs"
+              className="min-h-12 rounded-xl border border-slate-400 bg-white px-4 text-sm font-bold text-slate-900"
               title="AI 모델 변경 (Flash / Pro)"
             >
               {modelMode === 'speed' ? 'Flash' : 'Pro'}
@@ -477,12 +477,12 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
           {!isExpanded && (
             <button
               onClick={() => setIsExpanded(true)}
-              className="flex-1 h-10 px-3 bg-slate-100 hover:bg-slate-200/80 border border-slate-200 rounded-2xl text-left text-xs font-medium text-slate-500 truncate flex items-center justify-between transition active:scale-[0.98]"
+              className="flex min-h-12 flex-1 items-center justify-between truncate rounded-xl border border-slate-400 bg-white px-3 text-left text-sm font-medium text-slate-700"
             >
               <span className="truncate">
                 {problemText.trim() ? problemText : '질문 / 텍스트 입력...'}
               </span>
-              <span className="text-[10px] text-slate-400 shrink-0 ml-1">▲</span>
+              <span className="ml-1 shrink-0 text-sm text-slate-700">▲</span>
             </button>
           )}
 
@@ -490,17 +490,18 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
           <button
             onClick={handleSend}
             disabled={isLoading || isOffline || (!capturedImage && !problemText.trim())}
-            className={`w-10 h-10 rounded-full font-black shadow-md transition-all active:scale-90 flex items-center justify-center shrink-0 ${
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border font-black transition-opacity active:opacity-75 ${
               isLoading || isOffline || (!capturedImage && !problemText.trim())
-                ? 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-200'
-                : 'bg-[#099078] hover:bg-[#077864] text-white shadow-[#099078]/30 border border-[#099078]'
+                ? 'cursor-not-allowed border-slate-300 bg-white text-slate-500'
+                : 'border-slate-900'
             }`}
+            style={!isLoading && !isOffline && (capturedImage || problemText.trim()) ? { backgroundColor: subjectTheme.color, borderColor: subjectTheme.color, color: subjectTheme.foreground } : undefined}
             title="전송"
           >
             {isLoading ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
             ) : isOffline ? (
-              <WifiOff className="w-4 h-4 text-rose-400" />
+              <WifiOff className="h-5 w-5 text-slate-700" />
             ) : (
               <ArrowUp className="w-5 h-5 stroke-[2.8]" />
             )}

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { StandardProblemResponse, HintItem } from '@/types/problem';
 import { MathRenderer } from './MathRenderer';
+import { VisualRenderer } from './VisualRenderer';
 import {
   Lightbulb,
   Unlock,
@@ -96,6 +97,13 @@ export const HintLadderView: React.FC<HintLadderViewProps> = ({
         <div className="text-base text-slate-900 font-medium leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
           <MathRenderer content={data.extractedText} />
         </div>
+
+        {/* AI 시각 자료 (기하 도형 / 그래프 / 표) */}
+        {data.visualGuide && data.visualGuide.type !== 'none' && (
+          <div className="mt-4">
+            <VisualRenderer visualGuide={data.visualGuide} />
+          </div>
+        )}
       </div>
 
       {/* 2. 소크라테스식 힌트 사다리 3단계 */}
