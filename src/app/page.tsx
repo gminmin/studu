@@ -7,6 +7,9 @@ import {
   getRedirectResult,
   signInWithPopup,
   signInWithRedirect,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
   type User,
 } from 'firebase/auth';
@@ -57,6 +60,7 @@ export default function Home() {
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
   const [isAuthActionLoading, setIsAuthActionLoading] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
 
   // 오답노트 상태
   const [wrongNotes, setWrongNotes] = useState<WrongNoteItem[]>([]);
@@ -129,6 +133,7 @@ export default function Home() {
   const handleSignIn = async () => {
     if (!auth) return;
     setAuthError(null);
+    setAuthMessage(null);
     setIsAuthActionLoading(true);
     const provider = new GoogleAuthProvider();
     try {
@@ -145,10 +150,56 @@ export default function Home() {
     }
   };
 
+  const handleEmailSignIn = async (email: string, password: string) => {
+    if (!auth) return;
+    setAuthError(null);
+    setAuthMessage(null);
+    setIsAuthActionLoading(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      setIsAccountModalOpen(false);
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+    } finally {
+      setIsAuthActionLoading(false);
+    }
+  };
+
+  const handleEmailSignUp = async (email: string, password: string) => {
+    if (!auth) return;
+    setAuthError(null);
+    setAuthMessage(null);
+    setIsAuthActionLoading(true);
+    try {
+      await createUserWithEmailAndPassword(auth, email, password);
+      setIsAccountModalOpen(false);
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+    } finally {
+      setIsAuthActionLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async (email: string) => {
+    if (!auth) return;
+    setAuthError(null);
+    setAuthMessage(null);
+    setIsAuthActionLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setAuthMessage('비밀번호 재설정 이메일을 보냈어요. 받은 편지함을 확인해주세요.');
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+    } finally {
+      setIsAuthActionLoading(false);
+    }
+  };
+
   const handleSignOut = async () => {
     if (!auth) return;
     setIsAuthActionLoading(true);
     setAuthError(null);
+    setAuthMessage(null);
     try {
       await signOut(auth);
       setIsAccountModalOpen(false);
@@ -344,6 +395,7 @@ export default function Home() {
         user={user}
         onOpenAccount={() => {
           setAuthError(null);
+          setAuthMessage(null);
           setIsAccountModalOpen(true);
         }}
       />}
@@ -396,9 +448,17 @@ export default function Home() {
         user={user}
         isLoading={isAuthLoading || isAuthActionLoading}
         error={authError}
+        message={authMessage}
         isConfigured={firebaseConfigured}
-        onClose={() => setIsAccountModalOpen(false)}
+        onClose={() => {
+          setAuthError(null);
+          setAuthMessage(null);
+          setIsAccountModalOpen(false);
+        }}
         onSignIn={handleSignIn}
+        onEmailSignIn={handleEmailSignIn}
+        onEmailSignUp={handleEmailSignUp}
+        onPasswordReset={handlePasswordReset}
         onSignOut={handleSignOut}
       />
 
@@ -429,6 +489,24 @@ function getAuthErrorMessage(error: unknown): string {
   }
   if (code === 'auth/account-exists-with-different-credential') {
     return '이 이메일은 다른 로그인 방식으로 가입되어 있어요.';
+  }
+  if (code === 'auth/operation-not-allowed') {
+    return '이메일/비밀번호 로그인이 꺼져 있어요. Firebase Authentication 설정에서 이메일/비밀번호 제공자를 켜주세요.';
+  }
+  if (code === 'auth/email-already-in-use') {
+    return '이미 가입된 이메일이에요. 로그인하거나 비밀번호를 재설정해주세요.';
+  }
+  if (code === 'auth/invalid-email') {
+    return '이메일 주소를 확인해주세요.';
+  }
+  if (code === 'auth/weak-password') {
+    return '비밀번호는 6자 이상으로 설정해주세요.';
+  }
+  if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
+    return '이메일 또는 비밀번호가 맞지 않아요.';
+  }
+  if (code === 'auth/too-many-requests') {
+    return '시도 횟수가 많아요. 잠시 후 다시 시도해주세요.';
   }
   return 'Google 로그인에 실패했어요. 잠시 후 다시 시도해주세요.';
 }
