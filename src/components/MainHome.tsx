@@ -14,6 +14,7 @@ interface MainHomeProps {
   subject: SubjectType;
   onSubjectChange: (subject: SubjectType) => void;
   wallet: Wallet | null;
+  walletError: string | null;
   rank: number | null;
   overallRank: number | null;
   displayName: string;
@@ -37,7 +38,7 @@ const subjects: { id: SubjectType; label: string; Icon?: typeof FlaskConical | t
   { id: 'english', label: '영어' },
 ];
 
-export function MainHome({ subject, onSubjectChange, wallet, rank, overallRank, displayName, email, userId, idToken, leaders, activeTab, onTabChange, onStartScan, onStartCall, onOpenWrongNotes, onOpenStore, onExchange, onSignOut }: MainHomeProps) {
+export function MainHome({ subject, onSubjectChange, wallet, walletError, rank, overallRank, displayName, email, userId, idToken, leaders, activeTab, onTabChange, onStartScan, onStartCall, onOpenWrongNotes, onOpenStore, onExchange, onSignOut }: MainHomeProps) {
   const [openMenu, setOpenMenu] = useState<TopMenu>(null);
   const theme = SUBJECT_THEME[subject];
   const toggle = (menu: Exclude<TopMenu, null>) => setOpenMenu((current) => current === menu ? null : menu);
@@ -61,6 +62,7 @@ export function MainHome({ subject, onSubjectChange, wallet, rank, overallRank, 
 
       {openMenu && <button type="button" aria-label="메뉴 닫기" onClick={() => setOpenMenu(null)} className="fixed inset-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-20 cursor-default bg-black/35 backdrop-blur-[2px]" />}
 
+      {!wallet && walletError && <p role="alert" className="mx-4 mt-3 rounded-xl border border-slate-400 bg-white p-3 text-sm font-semibold text-slate-700">{walletError}</p>}
       <main className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-28 pt-5" onClick={() => openMenu && setOpenMenu(null)}>
         {activeTab === 'home' && <div aria-hidden="true" className="pointer-events-none fixed bottom-24 right-[-2.5rem] z-0 opacity-[0.055]"><SubjectArtwork subject={subject} /></div>}
         <div className="relative z-10 mx-auto max-w-2xl">

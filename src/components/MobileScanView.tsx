@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { SubjectType, AIModelMode } from '@/types/problem';
+import { SubjectType } from '@/types/problem';
 import { SUBJECT_THEME } from '@/lib/subjects/theme';
 import {
   Camera,
@@ -16,8 +16,6 @@ import {
 
 interface MobileScanViewProps {
   currentSubject: SubjectType;
-  modelMode: AIModelMode;
-  onModelModeChange: (mode: AIModelMode) => void;
   onStartAnalysis: (data: {
     imageBase64?: string;
     imageMimeType?: string;
@@ -30,8 +28,6 @@ interface MobileScanViewProps {
 
 export const MobileScanView: React.FC<MobileScanViewProps> = ({
   currentSubject,
-  modelMode,
-  onModelModeChange,
   onStartAnalysis,
   isLoading,
   isOffline,
@@ -277,14 +273,6 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
               <Plus className="w-6 h-6 stroke-[2.8]" />
             </button>
 
-            {/* ⭐️ 무채색 모델 변경 버튼 */}
-            <button
-              onClick={() => onModelModeChange(modelMode === 'speed' ? 'deep' : 'speed')}
-              className="min-h-12 rounded-xl border border-slate-400 bg-white px-4 text-sm font-bold text-slate-900"
-              title={`AI 분석 비용: ${modelMode === 'speed' ? 2 : 5}크레딧`}
-            >
-              {modelMode === 'speed' ? '기본 · 2C' : '통화 · 5C'}
-            </button>
           </div>
 
           {/* [가운데]: 입력창 트리거 바 (누르면 위로 펼쳐짐) */}

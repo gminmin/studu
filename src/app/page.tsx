@@ -19,7 +19,6 @@ import {
 } from 'firebase/auth';
 import {
   SubjectType,
-  AIModelMode,
   StandardProblemResponse,
   WrongNoteItem,
   MistakeReason,
@@ -48,7 +47,6 @@ export default function Home() {
   const [learningReturnTab, setLearningReturnTab] = useState<'scan' | 'wrongNote'>('scan');
   const [currentStep, setCurrentStep] = useState<AppStep>('scan');
   const [currentSubject, setCurrentSubject] = useState<SubjectType>('math');
-  const [modelMode, setModelMode] = useState<AIModelMode>('speed');
 
   // 네트워크 오프라인 상태 관리
   const [isOffline, setIsOffline] = useState<boolean>(false);
@@ -105,6 +103,7 @@ export default function Home() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || '지갑 정보를 불러오지 못했어요.');
+    setEconomyError(null);
     setWallet(data.wallet);
     setLeaders(data.leaders || []);
     setWalletRank(data.rank ?? null);
@@ -470,7 +469,7 @@ export default function Home() {
         },
         body: JSON.stringify({
           subject: currentSubject,
-          modelMode,
+          modelMode: 'speed',
           imageBase64: params.imageBase64,
           imageMimeType: params.imageMimeType,
           problemText: params.problemText,
@@ -619,6 +618,7 @@ export default function Home() {
         subject={currentSubject}
         onSubjectChange={handleSubjectPreferenceChange}
         wallet={wallet}
+        walletError={economyError}
         rank={walletRank}
         overallRank={walletOverallRank}
         displayName={user.displayName || 'tudu 학습자'}
@@ -644,8 +644,6 @@ export default function Home() {
       {user && !isLearning && isScanOpen && <main className="relative min-h-0 flex-1 overflow-hidden">
         <MobileScanView
           currentSubject={currentSubject}
-          modelMode={modelMode}
-          onModelModeChange={setModelMode}
           onStartAnalysis={handleStartAnalysis}
           isLoading={isLoading}
           isOffline={isOffline}

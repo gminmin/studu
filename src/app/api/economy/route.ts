@@ -45,6 +45,13 @@ export async function GET(req: NextRequest) {
     if (code === 'auth/invalid-credential' || (error as Error)?.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: '로그인이 필요해요.' }, { status: 401 });
     }
+    const message = (error as { message?: string })?.message || '';
+    if (message.includes('FIREBASE_ADMIN_') || message.includes('Could not load the default credentials')) {
+      return NextResponse.json({ error: '서버 Firebase Admin 인증 설정을 확인해주세요. Vercel의 Production 환경 변수와 함수 로그를 확인해야 합니다.' }, { status: 503 });
+    }
+    if (String(code) === '7' || code === 'permission-denied') {
+      return NextResponse.json({ error: '서버 계정의 Firestore 권한이 부족해요. Firebase 서비스 계정 권한을 확인해주세요.' }, { status: 503 });
+    }
     console.error('API /api/economy GET error:', error);
     return NextResponse.json({ error: '지갑 정보를 불러오지 못했어요.' }, { status: 500 });
   }
