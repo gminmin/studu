@@ -46,6 +46,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: '로그인이 필요해요.' }, { status: 401 });
     }
     const message = (error as { message?: string })?.message || '';
+    if (code === 'app/invalid-credential' || code === 'app/no-app') {
+      return NextResponse.json({ error: '서버 Firebase Admin 인증이 실패했어요. Vercel Production의 서비스 계정 변수를 확인해주세요.' }, { status: 503 });
+    }
     if (message.includes('FIREBASE_ADMIN_') || message.includes('Could not load the default credentials')) {
       return NextResponse.json({ error: '서버 Firebase Admin 인증 설정을 확인해주세요. Vercel의 Production 환경 변수와 함수 로그를 확인해야 합니다.' }, { status: 503 });
     }

@@ -35,6 +35,8 @@ function getAdminApp() {
       throw new Error('Set both FIREBASE_ADMIN_CLIENT_EMAIL and FIREBASE_ADMIN_PRIVATE_KEY.');
     }
     credential = cert({ projectId, clientEmail, privateKey });
+  } else if (process.env.VERCEL) {
+    throw new Error('FIREBASE_ADMIN_CREDENTIALS_MISSING: Set FIREBASE_ADMIN_CLIENT_EMAIL and FIREBASE_ADMIN_PRIVATE_KEY in Vercel Production.');
   } else {
     credential = applicationDefault();
   }
