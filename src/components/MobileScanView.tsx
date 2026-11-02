@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SubjectType, AIModelMode } from '@/types/problem';
 import { SUBJECT_THEME } from '@/lib/subjects/theme';
 import {
@@ -9,15 +9,13 @@ import {
   ArrowUp,
   RotateCcw,
   Calculator,
-  BookOpen,
-  Atom,
+  Microscope,
   WifiOff,
   X,
 } from 'lucide-react';
 
 interface MobileScanViewProps {
   currentSubject: SubjectType;
-  onSubjectChange: (sub: SubjectType) => void;
   modelMode: AIModelMode;
   onModelModeChange: (mode: AIModelMode) => void;
   onStartAnalysis: (data: {
@@ -32,7 +30,6 @@ interface MobileScanViewProps {
 
 export const MobileScanView: React.FC<MobileScanViewProps> = ({
   currentSubject,
-  onSubjectChange,
   modelMode,
   onModelModeChange,
   onStartAnalysis,
@@ -44,7 +41,6 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
   const [problemText, setProblemText] = useState<string>('');
 
   // 과목 선택창 가로 확장 상태 (현재 과목 탭 시 옆으로 촤르륵 늘어남)
-  const [isHorizontalExpanded, setIsHorizontalExpanded] = useState<boolean>(false);
 
   // 카메라 및 이미지 프리뷰
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -57,83 +53,6 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // 기본 과목 3종 (수학, 영어, 과학)
-  const subjects = useMemo<Array<{ id: SubjectType; icon: React.ReactNode; label: string }>>(() => [
-    { id: 'math', icon: <Calculator className="w-5 h-5" />, label: '수학' },
-    { id: 'english', icon: <BookOpen className="w-5 h-5" />, label: '영어' },
-    { id: 'science', icon: <Atom className="w-5 h-5" />, label: '과학' },
-  ], []);
-
-  // ⭐️ 끊김 없는 무한 스크롤을 위한 가상 연속 인덱스 (기본 중간값 300에서 시작)
-  const ITEM_HEIGHT = 40; // 각 과목 아이템 높이 (px)
-  const [virtualIndex, setVirtualIndex] = useState<number>(() => {
-    const idx = subjects.findIndex((s) => s.id === currentSubject);
-    return 300 + (idx >= 0 ? idx : 0);
-  });
-
-  // virtualIndex가 변경될 때마다 부모의 currentSubject 동기화
-  useEffect(() => {
-    const realIndex = ((virtualIndex % 3) + 3) % 3;
-    const targetSubject = subjects[realIndex].id;
-    if (targetSubject !== currentSubject) {
-      onSubjectChange(targetSubject);
-    }
-  }, [virtualIndex, currentSubject, onSubjectChange, subjects]);
-
-  // 부모에서 currentSubject가 직접 변경되었을 때 virtualIndex를 가장 가까운 인덱스로 보정
-  const syncVirtualIndexToSubject = (subId: SubjectType) => {
-    const currentReal = ((virtualIndex % 3) + 3) % 3;
-    const targetReal = subjects.findIndex((s) => s.id === subId);
-    if (targetReal === -1) return;
-    const diff = targetReal - currentReal;
-    // -1, 0, 1 중 가장 가까운 방향으로 델타 계산
-    const delta = diff === 2 ? -1 : diff === -2 ? 1 : diff;
-    setVirtualIndex((prev) => prev + delta);
-  };
-
-  // 세로 스와이프 제스처
-  const touchStartY = useRef<number | null>(null);
-  const isDragging = useRef<boolean>(false);
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartY.current = e.touches[0].clientY;
-    isDragging.current = false;
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (touchStartY.current === null) return;
-    const diff = e.touches[0].clientY - touchStartY.current;
-    if (Math.abs(diff) > 8) {
-      isDragging.current = true;
-    }
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartY.current === null) return;
-    const diff = e.changedTouches[0].clientY - touchStartY.current;
-
-    if (Math.abs(diff) > 20) {
-      if (diff > 0) {
-        // 아래로 스와이프: 위쪽 이전 과목으로 이동
-        setVirtualIndex((prev) => prev - 1);
-      } else {
-        // 위로 스와이프: 아래쪽 다음 과목으로 이동
-        setVirtualIndex((prev) => prev + 1);
-      }
-    }
-    touchStartY.current = null;
-  };
-
-  // 마우스 휠 무한 롤링
-  const handleWheel = (e: React.WheelEvent) => {
-    if (isHorizontalExpanded) return;
-    if (e.deltaY < -15) {
-      setVirtualIndex((prev) => prev - 1);
-    } else if (e.deltaY > 15) {
-      setVirtualIndex((prev) => prev + 1);
-    }
-  };
-
-  // 웹캠 초기화
   useEffect(() => {
     let stream: MediaStream | null = null;
     if (!capturedImage) {
@@ -223,22 +142,6 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
   };
 
   // 현재 과목 아이콘 탭 처리 (가로 확장 토글)
-  const handleCenterItemClick = () => {
-    if (isDragging.current) return;
-    setIsHorizontalExpanded(!isHorizontalExpanded);
-  };
-
-  // 화면에 렌더링할 윈도우 슬롯 (-3 ~ +3 총 7개 아이템) -> 완벽한 무한 롤링 구현
-  const visibleSlots = [-3, -2, -1, 0, 1, 2, 3].map((offset) => {
-    const slotVirtualIdx = virtualIndex + offset;
-    const subjectIdx = ((slotVirtualIdx % 3) + 3) % 3;
-    return {
-      offset,
-      slotVirtualIdx,
-      subject: subjects[subjectIdx],
-      isCurrent: offset === 0,
-    };
-  });
 
   return (
     <div className="relative flex h-full min-h-0 w-full select-none flex-col justify-between overflow-hidden bg-slate-900">
@@ -262,13 +165,6 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
               alt="촬영된 문제"
               className="w-full h-full object-contain"
             />
-            <button
-              onClick={handleRetake}
-              className="absolute left-4 top-4 z-20 flex min-h-12 items-center gap-2 rounded-xl border border-slate-900 bg-white px-4 text-sm font-bold text-slate-900 active:opacity-75"
-            >
-              <RotateCcw className="h-5 w-5 text-slate-900" />
-              <span>다시 찍기</span>
-            </button>
           </div>
         ) : hasCameraPermission ? (
           <video
@@ -311,87 +207,8 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
              - [무한 스크롤]: 마지막 과목 뒤에 첫 과목이 자연스럽게 이어짐
              - [가로 확장]: 현재 과목 탭 시 옆으로 늘어나 전체 한눈에 보기
          ───────────────────────────────────────────────────────────── */}
-      <div className="absolute top-4 right-4 z-30 flex items-center justify-end">
-        {isHorizontalExpanded ? (
-          /* [가로 확장 모드] 옆으로 촤르륵 늘어나 전체 과목 한눈에 노출 */
-          <div className="flex items-center gap-2 rounded-2xl border border-slate-900 bg-white p-2 animate-in slide-in-from-right-4 duration-300">
-            {subjects.map((sub) => {
-              const isSelected = sub.id === currentSubject;
-              return (
-                <button
-                  key={sub.id}
-                  onClick={() => {
-                    syncVirtualIndexToSubject(sub.id);
-                    setIsHorizontalExpanded(false);
-                  }}
-                  className={`flex h-12 w-12 items-center justify-center rounded-xl border transition-colors ${
-                    isSelected
-                      ? 'border-slate-900'
-                      : 'border-slate-300 bg-white text-slate-800'
-                  }`}
-                  style={isSelected ? { backgroundColor: subjectTheme.color, borderColor: subjectTheme.color, color: subjectTheme.foreground } : undefined}
-                  title={sub.label}
-                >
-                  {sub.icon}
-                </button>
-              );
-            })}
-            <button
-              onClick={() => setIsHorizontalExpanded(false)}
-              className="flex h-12 w-12 items-center justify-center rounded-xl border border-slate-300 bg-white text-slate-800"
-              title="닫기"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        ) : (
-          /* [세로 무한 롤링 휠] 끊김 없이 무한으로 회전하는 슬라이드 휠 */
-          <div
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onWheel={handleWheel}
-            className="relative flex cursor-ns-resize flex-col items-center justify-center rounded-2xl border border-slate-900 bg-white p-1"
-          >
-            {/* 세로 슬라이드 뷰포트 (높이 120px) */}
-            <div className="relative w-11 h-[120px] overflow-hidden flex items-center justify-center">
-              {/* ⭐️ 끊김 전혀 없는 상대 좌표 트랙 (상대 위치 기반 부드러운 translateY 롤링) */}
-              <div className="relative w-full h-full flex items-center justify-center">
-                {visibleSlots.map((slot) => {
-                  const yPos = slot.offset * ITEM_HEIGHT;
-                  const isCenter = slot.offset === 0;
-                  const isAdjacent = Math.abs(slot.offset) === 1;
-
-                  return (
-                    <div
-                      key={slot.slotVirtualIdx}
-                      onClick={() => {
-                        if (isCenter) {
-                          handleCenterItemClick();
-                        } else {
-                          setVirtualIndex(slot.slotVirtualIdx);
-                        }
-                      }}
-                      style={{
-                        transform: `translateY(${yPos}px) scale(${isCenter ? 1.08 : isAdjacent ? 0.78 : 0.5})`,
-                        opacity: isCenter ? 1 : isAdjacent ? 0.45 : 0,
-                        ...(isCenter ? { borderColor: subjectTheme.color, color: subjectTheme.color } : {}),
-                      }}
-                      className={`absolute flex h-11 w-11 items-center justify-center rounded-full border transition-all duration-300 ease-out ${
-                        isCenter
-                          ? 'z-20 border-slate-900 bg-white text-slate-900'
-                          : 'z-10 border-slate-300 bg-white text-slate-700'
-                      }`}
-                      title={isCenter ? '터치하여 전체 과목 펼치기' : slot.subject.label}
-                    >
-                      {slot.subject.icon}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
+      <div aria-hidden="true" className="pointer-events-none absolute right-5 top-5 z-30">
+        <SubjectGlyph subject={currentSubject} color={subjectTheme.color} />
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -401,7 +218,8 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
         <div className="absolute inset-x-0 bottom-24 z-20 flex justify-center pointer-events-none">
           <button
             onClick={handleShutter}
-            className="pointer-events-auto h-16 w-16 rounded-full border-0 bg-white active:scale-90"
+            className="pointer-events-auto h-16 w-16 rounded-full border-4 border-white active:scale-90"
+            style={{ backgroundColor: subjectTheme.color }}
             title="촬영하기"
             aria-label="촬영하기"
           />
@@ -410,11 +228,12 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
 
       {/* ─────────────────────────────────────────────────────────────
           4. 최하단 고정 바 (화이트 & 민트)
-             - [왼쪽]: 직관적인 (+) 첨부 버튼 + 무채색 모델 변경(Flash/Pro)
+             - [왼쪽]: 직관적인 (+) 첨부 버튼 + 분석 모드 선택
              - [가운데]: 누르면 위로 펼쳐지는 텍스트 입력창
              - [오른쪽]: 화살표 표시 하나만의 보내기 버튼 (ArrowUp)
          ───────────────────────────────────────────────────────────── */}
       <div className="absolute inset-x-0 bottom-0 z-30 flex flex-col gap-2 border-t border-slate-900 bg-white p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] transition-all duration-300 ease-out">
+        {capturedImage && <button type="button" onClick={handleRetake} className="flex h-9 min-h-9 w-full items-center justify-center gap-2 rounded-lg border border-slate-300 text-sm font-bold text-slate-700 active:bg-slate-100"><RotateCcw className="h-4 w-4"/><span>다시 찍기</span></button>}
         {/* (A) 입력창이 위로 올라가면서 펼쳐지는 영역 */}
         {isExpanded && (
           <div className="w-full rounded-2xl border border-slate-400 bg-white p-3 animate-in fade-in slide-in-from-bottom-3 duration-200">
@@ -462,9 +281,9 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
             <button
               onClick={() => onModelModeChange(modelMode === 'speed' ? 'deep' : 'speed')}
               className="min-h-12 rounded-xl border border-slate-400 bg-white px-4 text-sm font-bold text-slate-900"
-              title="AI 모델 변경 (Flash / Pro)"
+              title={`AI 분석 비용: ${modelMode === 'speed' ? 2 : 5}크레딧`}
             >
-              {modelMode === 'speed' ? 'Flash' : 'Pro'}
+              {modelMode === 'speed' ? '기본 · 2C' : '통화 · 5C'}
             </button>
           </div>
 
@@ -506,3 +325,10 @@ export const MobileScanView: React.FC<MobileScanViewProps> = ({
     </div>
   );
 };
+
+
+function SubjectGlyph({ subject, color }: { subject: SubjectType; color: string }) {
+  if (subject === 'english') return <span className="text-3xl font-black tracking-[-0.1em]" style={{ color }}>AZ</span>;
+  const Icon = subject === 'science' ? Microscope : Calculator;
+  return <Icon className="h-9 w-9" style={{ color }} strokeWidth={2.2} />;
+}

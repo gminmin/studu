@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ArrowLeft, LogOut, UserRound } from 'lucide-react';
+import { LogOut, UserRound } from 'lucide-react';
 import type { FormEvent } from 'react';
 import type { User } from 'firebase/auth';
 
-type SignupStage = 'sent' | 'confirm' | 'nickname' | null;
+type SignupStage = 'sent' | 'confirm' | 'password' | 'nickname' | null;
 type AuthView = 'login' | 'signup' | 'reset';
 
 interface AuthScreenProps {
@@ -17,11 +17,11 @@ interface AuthScreenProps {
   error: string | null;
   message: string | null;
   isConfigured: boolean;
-  onClose: () => void;
   onGoogleSignIn: () => void;
   onEmailSignIn: (email: string, password: string) => void;
-  onSendEmailLink: (email: string, password: string) => void;
+  onSendEmailLink: (email: string) => void;
   onCompleteEmailLink: (email: string) => void;
+  onSetPassword: (password: string) => Promise<boolean>;
   onSetNickname: (nickname: string) => Promise<boolean>;
   onPasswordReset: (email: string) => void;
   onCancelSignup: () => void;
@@ -37,11 +37,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   error,
   message,
   isConfigured,
-  onClose,
   onGoogleSignIn,
   onEmailSignIn,
   onSendEmailLink,
   onCompleteEmailLink,
+  onSetPassword,
   onSetNickname,
   onPasswordReset,
   onCancelSignup,
@@ -56,13 +56,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
 
   if (!isOpen) return null;
 
-  const close = () => {
-    setPassword('');
-    setPasswordConfirm('');
-    setLocalError(null);
-    onClose();
-  };
-
   const submitLogin = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPassword('');
@@ -70,6 +63,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   };
 
   const submitEmailLink = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalError(null);
+    onSendEmailLink(email.trim());
+  };
+
+  const submitLinkConfirmation = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLocalError(null);
+    onCompleteEmailLink((email.trim() || signupEmail).trim());
+  };
+
+  const submitPassword = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLocalError(null);
     if (password.length < 6) {
@@ -80,13 +85,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       setLocalError('비밀번호가 서로 달라요. 다시 확인해주세요.');
       return;
     }
-    onSendEmailLink(email.trim(), password);
-  };
-
-  const submitLinkConfirmation = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLocalError(null);
-    onCompleteEmailLink(email.trim());
+    const saved = await onSetPassword(password);
+    if (saved) {
+      setPassword('');
+      setPasswordConfirm('');
+    }
   };
 
   const submitNickname = async (event: FormEvent<HTMLFormElement>) => {
@@ -107,7 +110,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
       ? '이메일을 확인해주세요'
       : signupStage === 'confirm'
         ? '인증 링크를 확인할게요'
-      : signupStage === 'nickname'
+        : signupStage === 'password'
+          ? '비밀번호 설정'
+          : signupStage === 'nickname'
             ? '닉네임 설정'
             : view === 'signup'
               ? '이메일로 가입하기'
@@ -119,14 +124,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
     <main className="fixed inset-0 z-[80] flex min-h-dvh flex-col overflow-y-auto bg-white text-slate-950">
       <header className="flex min-h-16 shrink-0 items-center justify-between border-b border-slate-300 px-4 sm:px-6">
         <span className="text-lg font-black tracking-tight">tudu</span>
-        <button
-          type="button"
-          onClick={close}
-          className="flex min-h-12 items-center gap-2 rounded-lg px-3 text-sm font-semibold text-slate-700"
-          aria-label="로그인 화면 닫기"
-        >
-          <ArrowLeft className="h-5 w-5" /> 돌아가기
-        </button>
       </header>
 
       <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-4 sm:px-8 sm:py-6">
@@ -135,9 +132,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
           <h1 className="mt-1.5 text-2xl font-extrabold tracking-tight">{heading}</h1>
           <p className="mt-2 text-sm leading-5 text-slate-600">
             {signupStage === 'sent'
-              ? `${signupEmail} 주소로 보낸 링크를 눌러 이메일을 확인해주세요.`
+              ? `${signupEmail} 주소로 보낸 인증 링크를 열고, 링크가 열린 탭에서 가입을 계속해주세요. 가입이 끝나면 원래 탭은 닫아도 돼요.`
               : signupStage === 'nickname'
                   ? '학습 화면에서 사용할 닉네임을 정해주세요.'
+                  : signupStage === 'password'
+                    ? '이 탭에서 비밀번호와 닉네임 설정을 계속해주세요. 가입이 끝나면 기존 탭은 닫아도 돼요.'
                   : signupStage === 'confirm'
                     ? '링크를 다른 기기에서 열었어요. 인증에 사용한 이메일 주소를 입력해주세요.'
                     : '계정에 로그인하면 학습 기록과 지갑 기능을 이어서 사용할 수 있어요.'}
@@ -171,19 +170,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
               메일함에서 인증 링크를 열면 이 화면으로 돌아와 비밀번호를 설정할 수 있어요. 메일이 보이지 않으면 스팸함도 확인해주세요.
             </div>
             {error && <ErrorText>{error}</ErrorText>}
-            <button type="button" onClick={() => onSendEmailLink(signupEmail, password)} disabled={isLoading} className={primaryButtonClass}>
+            <button type="button" onClick={() => onSendEmailLink(signupEmail)} disabled={isLoading} className={primaryButtonClass}>
               {isLoading ? '보내는 중…' : '인증 이메일 다시 보내기'}
             </button>
             <button type="button" onClick={onCancelSignup} className={secondaryButtonClass}>로그인으로 돌아가기</button>
           </div>
         ) : signupStage === 'confirm' ? (
           <form onSubmit={submitLinkConfirmation} className="space-y-4">
-            <Field label="인증에 사용한 이메일" htmlFor="auth-confirm-email">
-              <input id="auth-confirm-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass} placeholder="name@example.com" />
+            <Field label="가입 이메일" htmlFor="auth-confirm-email">
+              <input id="auth-confirm-email" type="email" autoComplete="email" required value={email || signupEmail} onChange={(event) => setEmail(event.target.value)} className={inputClass} placeholder="name@example.com" />
             </Field>
             {error && <ErrorText>{error}</ErrorText>}
             <button type="submit" disabled={isLoading} className={primaryButtonClass}>
-              {isLoading ? '이메일 확인 중…' : '이메일 확인하기'}
+              {isLoading ? '인증 확인 중…' : '인증 확인하기'}
             </button>
           </form>
         ) : signupStage === 'nickname' ? (
@@ -195,6 +194,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             {error && <ErrorText>{error}</ErrorText>}
             <button type="submit" disabled={isLoading} className={primaryButtonClass}>
               {isLoading ? '저장 중…' : '닉네임 저장하고 시작하기'}
+            </button>
+          </form>
+        ) : signupStage === 'password' ? (
+          <form onSubmit={submitPassword} className="space-y-4">
+            <Field label="비밀번호" htmlFor="auth-new-password">
+              <input id="auth-new-password" type="password" autoComplete="new-password" minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} placeholder="6자 이상" />
+            </Field>
+            <Field label="비밀번호 확인" htmlFor="auth-new-password-confirm">
+              <input id="auth-new-password-confirm" type="password" autoComplete="new-password" minLength={6} required value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} className={inputClass} placeholder="비밀번호를 다시 입력하세요" />
+            </Field>
+            {localError && <ErrorText>{localError}</ErrorText>}
+            {error && <ErrorText>{error}</ErrorText>}
+            <button type="submit" disabled={isLoading} className={primaryButtonClass}>
+              {isLoading ? '저장 중…' : '비밀번호 저장하고 계속하기'}
             </button>
           </form>
         ) : !isConfigured ? (
@@ -218,16 +231,9 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
             <Field label="이메일" htmlFor="auth-signup-email">
               <input id="auth-signup-email" type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} className={inputClass} placeholder="name@example.com" />
             </Field>
-            <Field label="비밀번호" htmlFor="auth-signup-password">
-              <input id="auth-signup-password" type="password" autoComplete="new-password" minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} placeholder="6자 이상" />
-            </Field>
-            <Field label="비밀번호 확인" htmlFor="auth-signup-password-confirm">
-              <input id="auth-signup-password-confirm" type="password" autoComplete="new-password" minLength={6} required value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} className={inputClass} placeholder="비밀번호를 다시 입력하세요" />
-            </Field>
-            {localError && <ErrorText>{localError}</ErrorText>}
             {error && <ErrorText>{error}</ErrorText>}
             <button type="submit" disabled={isLoading} className={primaryButtonClass}>
-              {isLoading ? '인증 이메일 보내는 중…' : '가입하고 인증 이메일 받기'}
+              {isLoading ? '인증 이메일 보내는 중…' : '인증 이메일 받기'}
             </button>
             <button type="button" onClick={() => { setView('login'); onCancelSignup(); }} className={secondaryButtonClass}>로그인으로 돌아가기</button>
           </form>

@@ -57,6 +57,7 @@ export interface TwinProblem {
 }
 
 export interface StandardProblemResponse {
+  sessionId?: string;
   subject: SubjectType;
   topic: string;
   extractedText: string;
@@ -86,6 +87,7 @@ export type MistakeReason = 'calculation' | 'concept' | 'reading' | 'time' | 'ot
 
 export interface WrongNoteItem {
   id: string;
+  sessionId?: string;
   subject: SubjectType;
   topic: string;
   extractedText: string;

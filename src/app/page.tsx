@@ -6,11 +6,11 @@ import {
   onAuthStateChanged,
   getRedirectResult,
   signInWithRedirect,
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   sendSignInLinkToEmail,
   signInWithEmailLink,
   isSignInWithEmailLink,
+  updatePassword,
   sendPasswordResetEmail,
   updateProfile,
   reload,
@@ -24,19 +24,26 @@ import {
   WrongNoteItem,
   MistakeReason,
 } from '@/types/problem';
-import { Header } from '@/components/Header';
 import { MobileScanView } from '@/components/MobileScanView';
 import { LearningFlowView } from '@/components/LearningFlowView';
 import { WrongNoteView } from '@/components/WrongNoteView';
 import { TwinProblemModal } from '@/components/TwinProblemModal';
 import { AuthScreen } from '@/components/AuthScreen';
+import { EconomyPanel } from '@/components/EconomyPanel';
+import { MainHome, type MainTab } from '@/components/MainHome';
 import { auth, firebaseConfigured } from '@/lib/firebase/client';
-import { WifiOff } from 'lucide-react';
+import type { Wallet } from '@/lib/economy';
+import { WifiOff, X } from 'lucide-react';
 
 type AppStep = 'scan' | 'hints' | 'solution';
-type SignupStage = 'sent' | 'confirm' | 'nickname' | null;
+type SignupStage = 'sent' | 'confirm' | 'password' | 'nickname' | null;
+type EconomyLeader = { uid: string; rank: number; displayName: string; xp: number; isMe: boolean };
+type WalletTransaction = { id: string; currency: string; amount: number; tokenAmount?: number; xp?: number; reason: string };
 
 export default function Home() {
+  const [mainTab, setMainTab] = useState<MainTab>('home');
+  const [isScanOpen, setIsScanOpen] = useState(false);
+  const [isScanExitConfirmOpen, setIsScanExitConfirmOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'scan' | 'wrongNote'>('scan');
   const [learningReturnTab, setLearningReturnTab] = useState<'scan' | 'wrongNote'>('scan');
   const [currentStep, setCurrentStep] = useState<AppStep>('scan');
@@ -53,7 +60,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
   // 모달 상태
-  const [isAuthScreenOpen, setIsAuthScreenOpen] = useState<boolean>(false);
+  const [isAuthScreenOpen, setIsAuthScreenOpen] = useState<boolean>(true);
   const [signupStage, setSignupStage] = useState<SignupStage>(null);
   const [signupEmail, setSignupEmail] = useState('');
   const [isTwinModalOpen, setIsTwinModalOpen] = useState<boolean>(false);
@@ -71,32 +78,86 @@ export default function Home() {
 
   // 오답노트 상태
   const [wrongNotes, setWrongNotes] = useState<WrongNoteItem[]>([]);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
+  const [leaders, setLeaders] = useState<EconomyLeader[]>([]);
+  const [walletRank, setWalletRank] = useState<number | null>(null);
+  const [walletOverallRank, setWalletOverallRank] = useState<number | null>(null);
+  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
+  const [isEconomyPanelOpen, setIsEconomyPanelOpen] = useState(false);
+  const [isEconomyLoading, setIsEconomyLoading] = useState(false);
+  const [economyError, setEconomyError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedSubject = localStorage.getItem('tudu_default_subject');
+    if (savedSubject === 'math' || savedSubject === 'science' || savedSubject === 'english') {
+      queueMicrotask(() => setCurrentSubject(savedSubject));
+    }
+  }, []);
+
+  const handleSubjectPreferenceChange = useCallback((subject: SubjectType) => {
+    setCurrentSubject(subject);
+    localStorage.setItem('tudu_default_subject', subject);
+  }, []);
+
+  const refreshEconomy = useCallback(async (currentUser: User) => {
+    const response = await fetch(`/api/economy?subject=${currentSubject}`, {
+      headers: { Authorization: `Bearer ${await currentUser.getIdToken()}` },
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || '지갑 정보를 불러오지 못했어요.');
+    setWallet(data.wallet);
+    setLeaders(data.leaders || []);
+    setWalletRank(data.rank ?? null);
+    setWalletOverallRank(data.overallRank ?? null);
+    setWalletTransactions(data.transactions || []);
+    return data;
+  }, [currentSubject]);
+
+  const getCurrentIdToken = useCallback(() => user?.getIdToken() ?? Promise.resolve(''), [user]);
+
+  useEffect(() => {
+    if (!user) {
+      queueMicrotask(() => {
+        setWallet(null);
+        setLeaders([]);
+        setWalletRank(null);
+        setWalletOverallRank(null);
+        setWalletTransactions([]);
+      });
+      return;
+    }
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      void refreshEconomy(user).catch((error: unknown) => {
+        if (active) setEconomyError((error as Error).message || '지갑 정보를 불러오지 못했어요.');
+      });
+    });
+    return () => { active = false; };
+  }, [user, refreshEconomy]);
 
   const handleCompleteEmailLink = useCallback(async (email: string) => {
-    if (!auth || typeof window === 'undefined' || !isSignInWithEmailLink(auth, window.location.href)) {
+    if (!auth || typeof window === 'undefined') {
       setAuthError('인증 링크가 유효하지 않거나 만료됐어요. 인증 메일을 다시 요청해 주세요.');
       return;
     }
     setAuthError(null);
     setIsAuthActionLoading(true);
     try {
-      await signInWithEmailLink(auth, email, window.location.href);
-      const pendingPassword = sessionStorage.getItem('tudu_signup_password');
-      if (!pendingPassword) {
-        setAuthError('인증이 완료됐어요. 가입을 시작한 기기에서 이어가 주세요.');
-        setSignupStage('confirm');
-        setIsAuthScreenOpen(true);
-      } else {
-        await signOut(auth);
-        await createUserWithEmailAndPassword(auth, email, pendingPassword);
-        sessionStorage.removeItem('tudu_signup_password');
-        localStorage.removeItem('tudu_signup_email');
-        localStorage.setItem('tudu_signup_stage', 'nickname');
-        setSignupEmail(email);
-        setSignupStage('nickname');
-        setIsAuthScreenOpen(true);
+      const pendingEmailLink = isSignInWithEmailLink(auth, window.location.href);
+      if (pendingEmailLink) {
+        await signInWithEmailLink(auth, email, window.location.href);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (auth.currentUser?.email !== email) {
+        throw new Error('인증 링크가 유효하지 않거나 만료됐어요. 인증 메일을 다시 요청해 주세요.');
       }
-      window.history.replaceState({}, document.title, window.location.pathname);
+      if (!auth.currentUser) throw new Error('인증 후 계정을 확인하지 못했어요.');
+      localStorage.removeItem('tudu_signup_email');
+      localStorage.setItem('tudu_signup_stage', 'password');
+      setSignupEmail(email);
+      setSignupStage('password');
+      setAuthError(null);
+      setIsAuthScreenOpen(true);
     } catch (error) {
       setAuthError(getAuthErrorMessage(error));
     } finally {
@@ -116,17 +177,17 @@ export default function Home() {
     if (isSignInWithEmailLink(auth, window.location.href)) {
       const savedEmail = localStorage.getItem('tudu_signup_email');
       if (savedEmail) {
-
         queueMicrotask(() => {
           if (!active) return;
           setSignupEmail(savedEmail);
-          setSignupStage('nickname');
+          setSignupStage('confirm');
           setIsAuthScreenOpen(true);
           void handleCompleteEmailLink(savedEmail);
         });
       } else {
         queueMicrotask(() => {
           if (!active) return;
+          if (savedEmail) setSignupEmail(savedEmail);
           setSignupStage('confirm');
           setIsAuthScreenOpen(true);
         });
@@ -137,10 +198,14 @@ export default function Home() {
       setUser(nextUser);
       setIsAuthLoading(false);
       const stage = localStorage.getItem('tudu_signup_stage');
-      if (stage === 'nickname') {
+      if (stage === 'password' || stage === 'nickname') {
         setSignupStage(stage);
         setSignupEmail(nextUser?.email ?? localStorage.getItem('tudu_signup_email') ?? '');
         setIsAuthScreenOpen(true);
+      } else if (stage === 'sent' || stage === 'confirm') {
+        setIsAuthScreenOpen(true);
+      } else {
+        setIsAuthScreenOpen(!nextUser);
       }
     });
     return () => {
@@ -196,7 +261,6 @@ export default function Home() {
       await signInWithRedirect(auth, provider);
     } catch (error) {
       setAuthError(getAuthErrorMessage(error));
-    } finally {
       setIsAuthActionLoading(false);
     }
   };
@@ -208,6 +272,7 @@ export default function Home() {
     setIsAuthActionLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      setSignupStage(null);
       setIsAuthScreenOpen(false);
     } catch (error) {
       setAuthError(getAuthErrorMessage(error));
@@ -216,7 +281,7 @@ export default function Home() {
     }
   };
 
-  const handleSendEmailLink = async (email: string, password: string) => {
+  const handleSendEmailLink = async (email: string) => {
     if (!auth) return;
     setAuthError(null);
     setAuthMessage(null);
@@ -228,13 +293,30 @@ export default function Home() {
       });
       localStorage.setItem('tudu_signup_email', email);
       localStorage.setItem('tudu_signup_stage', 'sent');
-      sessionStorage.setItem('tudu_signup_password', password);
       setAuthError(null);
       setSignupEmail(email);
       setSignupStage('sent');
       setIsAuthScreenOpen(true);
     } catch (error) {
+      console.error('[tudu auth] Email link send failed', error);
       setAuthError(getAuthErrorMessage(error));
+    } finally {
+      setIsAuthActionLoading(false);
+    }
+  };
+
+  const handleSetSignupPassword = async (password: string) => {
+    if (!auth?.currentUser) return false;
+    setAuthError(null);
+    setIsAuthActionLoading(true);
+    try {
+      await updatePassword(auth.currentUser, password);
+      localStorage.setItem('tudu_signup_stage', 'nickname');
+      setSignupStage('nickname');
+      return true;
+    } catch (error) {
+      setAuthError(getAuthErrorMessage(error));
+      return false;
     } finally {
       setIsAuthActionLoading(false);
     }
@@ -264,10 +346,10 @@ export default function Home() {
   const handleCancelSignup = () => {
     localStorage.removeItem('tudu_signup_email');
     localStorage.removeItem('tudu_signup_stage');
-    sessionStorage.removeItem('tudu_signup_password');
     setSignupStage(null);
     setSignupEmail('');
     setAuthError(null);
+    setIsAuthScreenOpen(!user);
   };
 
   const handlePasswordReset = async (email: string) => {
@@ -292,12 +374,62 @@ export default function Home() {
     setAuthMessage(null);
     try {
       await signOut(auth);
+      setSignupStage(null);
       setIsAuthScreenOpen(false);
     } catch {
       setAuthError('로그아웃하지 못했어요. 다시 시도해주세요.');
     } finally {
       setIsAuthActionLoading(false);
     }
+  };
+
+  const handleSubmitLearningAnswer = async (
+    sessionId: string,
+    answer: string,
+    kind: 'answer' | 'review',
+  ) => {
+    if (!user) throw new Error('로그인이 필요해요.');
+    const response = await fetch('/api/rewards', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${await user.getIdToken()}`,
+      },
+      body: JSON.stringify({ sessionId, answer, kind }),
+    });
+    const data = await response.json();
+    if (data.wallet) setWallet(data.wallet);
+    if (!response.ok) throw new Error(data.error || '답안 확인에 실패했어요.');
+    await refreshEconomy(user);
+    return data as { correct: boolean; attemptCount: number; reward: { tokens: number; xp: number } | null };
+  };
+
+  const handleExchangeCredits = async (credits: number) => {
+    if (!user) return;
+    setIsEconomyLoading(true);
+    setEconomyError(null);
+    try {
+      const response = await fetch('/api/economy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+        body: JSON.stringify({ transactionId: crypto.randomUUID(), credits }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || '환전을 처리하지 못했어요.');
+      setWallet(data.wallet);
+      await refreshEconomy(user);
+    } catch (error) {
+      setEconomyError((error as Error).message || '환전을 처리하지 못했어요.');
+    } finally {
+      setIsEconomyLoading(false);
+    }
+  };
+
+  const handleExchangeOneCredit = () => {
+    void handleExchangeCredits(1);
   };
 
   const saveWrongNotes = (updated: WrongNoteItem[]) => {
@@ -315,7 +447,7 @@ export default function Home() {
     setNetworkErrorMsg(null);
 
     if (!user) {
-      setAuthError('문제를 분석하려면 Google 계정으로 로그인해주세요.');
+      setAuthError('문제를 분석하려면 로그인해주세요.');
       setIsAuthScreenOpen(true);
       return;
     }
@@ -343,15 +475,22 @@ export default function Home() {
           imageMimeType: params.imageMimeType,
           problemText: params.problemText,
           userContext: params.userContext,
+          requestId: crypto.randomUUID(),
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 402) {
+          setEconomyError(data.error || '크레딧이 부족해요.');
+          setIsEconomyPanelOpen(true);
+          return;
+        }
         throw new Error(data.error || '문제 분석 실패');
       }
 
       setProblemData(data);
+      void refreshEconomy(user).catch(() => undefined);
       setIsSolvedAlone(false);
       setCurrentStep('hints');
     } catch (err: unknown) {
@@ -372,6 +511,7 @@ export default function Home() {
       }
     } finally {
       setIsLoading(false);
+      if (user) void refreshEconomy(user).catch(() => undefined);
     }
   };
 
@@ -458,6 +598,8 @@ export default function Home() {
   const handleExitLearning = () => {
     setCurrentStep('scan');
     setActiveTab(learningReturnTab);
+    setMainTab('home');
+    setIsScanOpen(false);
   };
 
   const isLearning = activeTab === 'scan' && (currentStep === 'hints' || currentStep === 'solution') && Boolean(problemData);
@@ -465,7 +607,7 @@ export default function Home() {
   return (
       <div className="fixed inset-0 flex h-dvh w-full flex-col overflow-hidden bg-white text-slate-900">
       {/* ⚠️ 네트워크 연결 끊김 글로벌 알림 배너 */}
-      {(isOffline || networkErrorMsg) && (
+      {user && (isOffline || networkErrorMsg) && (
         <div className="z-50 flex shrink-0 items-center justify-center gap-2 border-b border-slate-900 bg-slate-900 px-4 py-2 text-center text-sm font-bold text-white">
           <WifiOff className="w-3.5 h-3.5 shrink-0" />
           <span>{networkErrorMsg || '네트워크가 연결되지 않았습니다. 인터넷 연결을 확인해주세요.'}</span>
@@ -473,65 +615,81 @@ export default function Home() {
       )}
 
       {/* 모바일 상단 미니 바 */}
-      {!isLearning && <Header
-        activeTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab);
-          if (tab === 'scan' && currentStep !== 'scan' && !problemData) {
-            setCurrentStep('scan');
-          }
+      {user && !isLearning && !isScanOpen && activeTab === 'scan' && <MainHome
+        subject={currentSubject}
+        onSubjectChange={handleSubjectPreferenceChange}
+        wallet={wallet}
+        rank={walletRank}
+        overallRank={walletOverallRank}
+        displayName={user.displayName || 'tudu 학습자'}
+        email={user.email || ''}
+        userId={user.uid}
+        idToken={getCurrentIdToken}
+        leaders={leaders}
+        activeTab={mainTab}
+        onTabChange={setMainTab}
+        onStartScan={() => {
+          setActiveTab('scan');
+          setCurrentStep('scan');
+          setMainTab('home');
+          setIsScanOpen(true);
         }}
-        wrongNoteCount={wrongNotes.length}
-        user={user}
-        onOpenAccount={() => {
-          setAuthError(null);
-          setAuthMessage(null);
-          setIsAuthScreenOpen(true);
-        }}
+        onStartCall={() => window.alert('?? ??? ?? ????.')}
+        onOpenWrongNotes={() => setActiveTab('wrongNote')}
+        onOpenStore={() => setMainTab('personal')}
+        onExchange={handleExchangeOneCredit}
+        onSignOut={handleSignOut}
       />}
 
-      {/* 메인 뷰포트 영역 (전체 화면 높이 꽉 차게) */}
-      <main className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-        {activeTab === 'scan' && (
-          <div className="relative min-h-0 w-full flex-1">
-            {currentStep === 'scan' && (
-              <MobileScanView
-                currentSubject={currentSubject}
-                onSubjectChange={setCurrentSubject}
-                modelMode={modelMode}
-                onModelModeChange={setModelMode}
-                onStartAnalysis={handleStartAnalysis}
-                isLoading={isLoading}
-                isOffline={isOffline}
-              />
-            )}
+      {user && !isLearning && isScanOpen && <main className="relative min-h-0 flex-1 overflow-hidden">
+        <MobileScanView
+          currentSubject={currentSubject}
+          modelMode={modelMode}
+          onModelModeChange={setModelMode}
+          onStartAnalysis={handleStartAnalysis}
+          isLoading={isLoading}
+          isOffline={isOffline}
+        />
+        <button type="button" onClick={() => setIsScanExitConfirmOpen(true)} aria-label="나가기" className="absolute left-4 top-3 z-30 flex min-h-11 min-w-11 items-center justify-center text-white active:opacity-70"><X className="h-7 w-7" strokeWidth={2.8} /></button>
+        {isScanExitConfirmOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-5">
+          <section role="dialog" aria-modal="true" aria-labelledby="scan-exit-title" className="w-full max-w-sm rounded-2xl border border-slate-900 bg-white p-5 text-slate-950">
+            <h2 id="scan-exit-title" className="text-lg font-extrabold">촬영을 나갈까요?</h2>
+            <p className="mt-2 text-sm leading-5 text-slate-600">계속 촬영하거나 학습 홈으로 돌아갈 수 있어요.</p>
+            <div className="mt-5 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setIsScanExitConfirmOpen(false)} className="min-h-12 rounded-xl border border-slate-400 px-3 text-sm font-bold">계속하기</button>
+              <button type="button" onClick={() => { setIsScanExitConfirmOpen(false); setIsScanOpen(false); }} className="min-h-12 rounded-xl border border-slate-900 bg-slate-900 px-3 text-sm font-bold text-white">나가기</button>
+            </div>
+          </section>
+        </div>}
+      </main>}
 
-            {(currentStep === 'hints' || currentStep === 'solution') && problemData && (
-              <div className="h-full w-full overflow-hidden">
-                <LearningFlowView
-                  data={problemData}
-                  onSolveAlone={handleSolveAlone}
-                  onSaveToWrongNote={() => handleSaveToWrongNote('concept')}
-                  onOpenTwinProblem={handleOpenCurrentTwinProblem}
-                  onExit={handleExitLearning}
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 오답노트 보관함 */}
-        {activeTab === 'wrongNote' && (
-          <div className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:p-4">
-            <WrongNoteView
-              notes={wrongNotes}
-              onDeleteNote={handleDeleteNote}
-              onOpenTwin={handleOpenNoteTwinProblem}
-              onSelectNoteDetail={handleSelectNoteDetail}
+      {user && isLearning && <main className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+        <div className="relative min-h-0 w-full flex-1">
+          <div className="h-full w-full overflow-hidden">
+            <LearningFlowView
+              data={problemData!}
+              isReview={learningReturnTab === 'wrongNote'}
+              onSubmitAnswer={handleSubmitLearningAnswer}
+              onSolveAlone={handleSolveAlone}
+              onSaveToWrongNote={() => handleSaveToWrongNote('concept')}
+              onOpenTwinProblem={handleOpenCurrentTwinProblem}
+              onExit={handleExitLearning}
             />
           </div>
-        )}
-      </main>
+        </div>
+      </main>}
+
+      {user && !isLearning && mainTab === 'home' && activeTab === 'wrongNote' && <main className="min-h-0 flex-1 overflow-y-auto pb-20">
+        <div className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:p-4">
+          <button type="button" onClick={() => setActiveTab('scan')} className="mb-3 min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold">← 학습 홈</button>
+          <WrongNoteView
+            notes={wrongNotes}
+            onDeleteNote={handleDeleteNote}
+            onOpenTwin={handleOpenNoteTwinProblem}
+            onSelectNoteDetail={handleSelectNoteDetail}
+          />
+        </div>
+      </main>}
 
       <AuthScreen
         isOpen={isAuthScreenOpen}
@@ -542,19 +700,27 @@ export default function Home() {
         error={authError}
         message={authMessage}
         isConfigured={firebaseConfigured}
-        onClose={() => {
-          setAuthError(null);
-          setAuthMessage(null);
-          setIsAuthScreenOpen(false);
-        }}
         onGoogleSignIn={handleSignIn}
         onEmailSignIn={handleEmailSignIn}
         onSendEmailLink={handleSendEmailLink}
         onCompleteEmailLink={handleCompleteEmailLink}
+        onSetPassword={handleSetSignupPassword}
         onSetNickname={handleSetSignupNickname}
         onPasswordReset={handlePasswordReset}
         onCancelSignup={handleCancelSignup}
         onSignOut={handleSignOut}
+      />
+
+      <EconomyPanel
+        isOpen={isEconomyPanelOpen}
+        wallet={wallet}
+        leaders={leaders}
+        rank={walletRank}
+        transactions={walletTransactions}
+        error={economyError}
+        isLoading={isEconomyLoading}
+        onClose={() => setIsEconomyPanelOpen(false)}
+        onExchange={handleExchangeCredits}
       />
 
       {/* 모달 2: 쌍둥이 변형 문제 (Twin Problem) */}
@@ -572,7 +738,13 @@ export default function Home() {
 }
 
 function getAuthErrorMessage(error: unknown): string {
-  const code = (error as { code?: string })?.code;
+  const authFailure = error as {
+    code?: string;
+    message?: string;
+    errorInfo?: { code?: string; message?: string };
+    customData?: { _tokenResponse?: { error?: { message?: string } } };
+  } | null;
+  const code = authFailure?.code ?? authFailure?.errorInfo?.code;
   if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
     return '로그인을 취소했어요.';
   }
@@ -586,13 +758,25 @@ function getAuthErrorMessage(error: unknown): string {
     return '이 이메일은 다른 로그인 방식으로 가입되어 있어요.';
   }
   if (code === 'auth/operation-not-allowed') {
-    return '이메일/비밀번호 로그인이 꺼져 있어요. Firebase Authentication 설정에서 이메일/비밀번호 제공자를 켜주세요.';
+    return '이메일 인증 로그인이 꺼져 있어요. Firebase Authentication의 이메일/비밀번호와 이메일 링크 제공자를 모두 켜주세요.';
   }
   if (code === 'auth/email-already-in-use') {
     return '이미 가입된 이메일이에요. 로그인하거나 비밀번호를 재설정해주세요.';
   }
   if (code === 'auth/invalid-email') {
     return '이메일 주소를 확인해주세요.';
+  }
+  if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
+    return '인증 링크가 이미 사용됐거나 만료됐어요. 인증 이메일을 다시 보내주세요.';
+  }
+  if (code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri') {
+    return '인증 링크 도메인이 Firebase 승인 도메인에 등록되지 않았어요. 현재 사이트 도메인을 추가해주세요.';
+  }
+  if (code === 'auth/missing-email') {
+    return '인증에 사용할 이메일 주소를 입력해주세요.';
+  }
+  if (code === 'auth/requires-recent-login') {
+    return '인증 세션이 만료됐어요. 이메일 인증 링크를 다시 열어주세요.';
   }
   if (code === 'auth/weak-password') {
     return '비밀번호는 6자 이상으로 설정해주세요.';
@@ -603,5 +787,13 @@ function getAuthErrorMessage(error: unknown): string {
   if (code === 'auth/too-many-requests') {
     return '시도 횟수가 많아요. 잠시 후 다시 시도해주세요.';
   }
-  return 'Google 로그인에 실패했어요. 잠시 후 다시 시도해주세요.';
+  if (code === 'auth/quota-exceeded') {
+    return '오늘 보낼 수 있는 이메일 인증 링크 한도에 도달했어요. 한도가 초기화된 뒤 다시 시도하거나 Firebase 요금제를 확인해주세요.';
+  }
+  const detail = authFailure?.message ?? authFailure?.errorInfo?.message ?? authFailure?.customData?._tokenResponse?.error?.message;
+  return code
+    ? `인증 처리에 실패했어요. 오류 코드: ${code}`
+    : detail
+      ? `인증 처리에 실패했어요. ${detail}`
+      : '인증 요청이 Firebase에서 거절됐어요. Firebase Console의 승인 도메인과 이메일 링크 로그인 설정을 확인해주세요.';
 }

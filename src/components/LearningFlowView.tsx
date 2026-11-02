@@ -10,6 +10,12 @@ import { VisualRenderer } from './VisualRenderer';
 
 interface LearningFlowViewProps {
   data: StandardProblemResponse;
+  isReview: boolean;
+  onSubmitAnswer: (sessionId: string, answer: string, kind: 'answer' | 'review') => Promise<{
+    correct: boolean;
+    attemptCount: number;
+    reward: { tokens: number; xp: number } | null;
+  }>;
   onSolveAlone: () => void;
   onSaveToWrongNote: () => void;
   onOpenTwinProblem: () => void;
@@ -46,6 +52,8 @@ function isNearAnswer(input: string, expected: string): boolean {
 
 export const LearningFlowView: React.FC<LearningFlowViewProps> = ({
   data,
+  isReview,
+  onSubmitAnswer,
   onSolveAlone,
   onSaveToWrongNote,
   onOpenTwinProblem,
@@ -62,6 +70,8 @@ export const LearningFlowView: React.FC<LearningFlowViewProps> = ({
   const [showHint, setShowHint] = useState(false);
   const [saved, setSaved] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [rewardMessage, setRewardMessage] = useState('');
   const steps = data.fullSolution.steps ?? [];
   const breakdown = data.problemBreakdown ?? {
     summary: '문제에서 주어진 조건과 구해야 하는 것을 확인해보세요.',
@@ -73,21 +83,37 @@ export const LearningFlowView: React.FC<LearningFlowViewProps> = ({
   const correct = data.fullSolution.finalAnswer.trim().toLocaleLowerCase().replace(/\s+/g, '');
   const step = steps[Math.min(stepIndex, Math.max(steps.length - 1, 0))];
 
-  const submitAnswer = (event: React.FormEvent) => {
+  const submitAnswer = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!answer.trim()) return;
+    if (!answer.trim() || isSubmitting) return;
     const input = answer.trim().toLocaleLowerCase().replace(/\s+/g, '');
-    const isCorrect = input === correct || (correct !== '' && Number(input) === Number(correct) && Number.isFinite(Number(input)));
+    const locallyCorrect = input === correct || (correct !== '' && Number(input) === Number(correct) && Number.isFinite(Number(input)));
+    const nextAttemptCount = attemptCount + 1;
+    setIsSubmitting(true);
+    let isCorrect = locallyCorrect;
+    let resolvedAttemptCount = nextAttemptCount;
+    let reward: { tokens: number; xp: number } | null = null;
+    if (data.sessionId) {
+      try {
+        const response = await onSubmitAnswer(data.sessionId, answer, isReview ? 'review' : 'answer');
+        isCorrect = response.correct;
+        resolvedAttemptCount = response.attemptCount;
+        reward = response.reward;
+      } catch {
+        setRewardMessage('보상 동기화에 실패했어요. 다음에 다시 확인해주세요.');
+      }
+    }
+    setIsSubmitting(false);
+    setAttemptCount(resolvedAttemptCount);
     if (isCorrect) {
       setFeedback('right');
-      setSuccessAttemptCount(attemptCount + 1);
+      setSuccessAttemptCount(resolvedAttemptCount);
+      if (reward) setRewardMessage(`+${reward.tokens} 토큰 · +${reward.xp} XP`);
       const messages = ['좋아요!', '완벽해요!', '훌륭해요!'];
       setSuccessMessage(messages[Math.floor(Math.random() * messages.length)]);
     } else {
-      const nextAttemptCount = attemptCount + 1;
-      setAttemptCount(nextAttemptCount);
       setFeedback(isNearAnswer(input, correct) ? 'near' : 'wrong');
-      if (nextAttemptCount >= 2) setShowSolution(true);
+      if (resolvedAttemptCount >= 2) setShowSolution(true);
     }
     if (isCorrect) {
       onSolveAlone();
@@ -210,6 +236,7 @@ export const LearningFlowView: React.FC<LearningFlowViewProps> = ({
                 {successMessage}
               </h1>
               <p className="text-sm leading-6 text-slate-600">끝까지 생각해서 정답을 찾아냈어요.</p>
+              {rewardMessage && <p role="status" className="text-sm font-bold text-slate-700">{rewardMessage}</p>}
             </div>}
             {feedback === 'right' && showSolution && <h1 className="text-center text-2xl font-extrabold text-slate-950">{successMessage}</h1>}
             {attemptCount >= 2 && feedback && feedback !== 'right' && <h1 className="text-center text-2xl font-extrabold text-slate-950">{feedback === 'near' ? '아쉬워요.' : '오답이에요.'}</h1>}
@@ -244,7 +271,7 @@ export const LearningFlowView: React.FC<LearningFlowViewProps> = ({
           <button onClick={onOpenTwinProblem} className="min-h-12 rounded-xl px-2 text-sm font-bold" style={{ backgroundColor: theme.color, color: theme.foreground }}>더 풀기</button>
         </> : <>
           {stage > 0 ? <button onClick={back} className="min-h-12 rounded-xl border border-slate-400 px-2 text-sm font-bold text-slate-900">이전</button> : <span />}
-          <button type="submit" form="learning-answer-form" disabled={!answer.trim()} className="col-span-2 min-h-12 rounded-xl px-2 text-sm font-bold disabled:opacity-50" style={{ backgroundColor: theme.color, color: theme.foreground }}>{attemptCount === 1 ? '다시 시도' : '정답 확인'}</button>
+              <button type="submit" form="learning-answer-form" disabled={!answer.trim() || isSubmitting} className="col-span-2 min-h-12 rounded-xl px-2 text-sm font-bold disabled:opacity-50" style={{ backgroundColor: theme.color, color: theme.foreground }}>{isSubmitting ? '확인 중…' : attemptCount === 1 ? '다시 시도' : '정답 확인'}</button>
         </>}
       </footer>
 

@@ -1,8 +1,9 @@
 'use client';
 
 import React from 'react';
-import { BookMarked, Camera, UserRound } from 'lucide-react';
+import { BookMarked, Camera, Coins, UserRound } from 'lucide-react';
 import type { User } from 'firebase/auth';
+import type { Wallet } from '@/lib/economy';
 
 interface HeaderProps {
   activeTab: 'scan' | 'wrongNote';
@@ -10,6 +11,8 @@ interface HeaderProps {
   wrongNoteCount: number;
   user: User | null;
   onOpenAccount: () => void;
+  wallet: Wallet | null;
+  onOpenEconomy: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,6 +21,8 @@ export const Header: React.FC<HeaderProps> = ({
   wrongNoteCount,
   user,
   onOpenAccount,
+  wallet,
+  onOpenEconomy,
 }) => {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-300 bg-white text-slate-900">
@@ -56,8 +61,17 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
             title="오답노트"
           >
-            <BookMarked className="h-5 w-5" /><span>오답노트</span>
+            <BookMarked className="h-5 w-5" /><span className="hidden sm:inline">오답노트</span>
             <span className={`rounded-md px-1.5 text-xs ${activeTab === 'wrongNote' ? 'bg-white text-slate-900' : 'bg-slate-100 text-slate-700'}`}>{wrongNoteCount}</span>
+          </button>
+          <button
+            onClick={onOpenEconomy}
+            className="flex min-h-12 items-center justify-center gap-1 rounded-xl border border-slate-300 px-2 text-xs font-bold text-slate-800"
+            aria-label={`지갑: 크레딧 ${wallet?.credits ?? '불러오는 중'}, 토큰 ${wallet?.tokens ?? '불러오는 중'}`}
+            title="지갑과 XP 순위"
+          >
+            <Coins className="h-4 w-4" />
+            <span className="hidden tabular-nums sm:inline">{wallet ? `${wallet.credits}C · ${wallet.tokens}T` : '—'}</span>
           </button>
           <button
             onClick={onOpenAccount}
