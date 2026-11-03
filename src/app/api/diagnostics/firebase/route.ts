@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getAdminAuth, getAdminFirestore, getFirebaseAdminDiagnostics } from '@/lib/firebase/admin';
 
-export const dynamic = 'force-dynamic';
-
 export async function GET() {
   const diagnostics = getFirebaseAdminDiagnostics();
 
