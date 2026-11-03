@@ -13,13 +13,16 @@ function getAdminApp() {
   let projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   let credential;
 
-  // Prefer the split variables used by Vercel. A stale or malformed JSON
-  // service-account variable must not override a valid key pair.
+  // Firebase Admin v13 validates the original service-account field names.
   if (clientEmail || privateKey) {
     if (!clientEmail || !privateKey) {
       throw new Error('Set both FIREBASE_ADMIN_CLIENT_EMAIL and FIREBASE_ADMIN_PRIVATE_KEY.');
     }
-    credential = cert({ projectId, clientEmail, privateKey });
+    credential = cert({
+      project_id: projectId,
+      client_email: clientEmail,
+      private_key: privateKey,
+    } as unknown as Parameters<typeof cert>[0]);
   } else if (serviceAccountJson) {
     try {
       const serviceAccount = JSON.parse(serviceAccountJson) as {
@@ -30,10 +33,10 @@ function getAdminApp() {
       if (!serviceAccount.client_email || !serviceAccount.private_key) throw new Error('Service account fields are missing.');
       projectId = projectId || serviceAccount.project_id;
       credential = cert({
-        projectId,
-        clientEmail: serviceAccount.client_email,
-        privateKey: serviceAccount.private_key.replace(/\\n/g, '\n'),
-      });
+        project_id: projectId,
+        client_email: serviceAccount.client_email,
+        private_key: serviceAccount.private_key.replace(/\\n/g, '\n'),
+      } as unknown as Parameters<typeof cert>[0]);
     } catch (error) {
       throw new Error(`FIREBASE_ADMIN_SERVICE_ACCOUNT is invalid: ${(error as Error).message}`);
     }
