@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { LogOut, UserRound } from 'lucide-react';
 import type { FormEvent } from 'react';
 import type { User } from 'firebase/auth';
@@ -123,7 +124,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   return (
     <main className="fixed inset-0 z-[80] flex min-h-dvh flex-col overflow-y-auto bg-white text-slate-950">
       <header className="flex min-h-16 shrink-0 items-center justify-between border-b border-slate-300 px-4 sm:px-6">
-        <span className="text-lg font-black tracking-tight">tudu</span>
+        <Image
+          src="/tudu.svg"
+          alt="tudu"
+          width={200}
+          height={44}
+          className="h-11 w-[88px] object-cover sm:w-[200px]"
+        />
       </header>
 
       <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-4 sm:px-8 sm:py-6">

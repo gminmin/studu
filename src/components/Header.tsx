@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { BookMarked, Camera, Coins, UserRound } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import type { Wallet } from '@/lib/economy';
@@ -33,10 +34,14 @@ export const Header: React.FC<HeaderProps> = ({
           className="flex min-h-12 items-center gap-2 rounded-xl text-left active:opacity-70"
           aria-label="tudu 홈"
         >
-          <div className="flex items-center gap-1.5">
-            <span className="font-black text-base tracking-tight text-slate-900">tudu</span>
-            <span className="text-xs font-semibold text-slate-600">문제 풀이</span>
-          </div>
+          <Image
+            src="/tudu.svg"
+            alt=""
+            width={200}
+            height={44}
+            className="h-11 w-[88px] object-cover sm:w-[200px]"
+          />
+          <span className="text-xs font-semibold text-slate-600">문제 풀이</span>
         </button>
 
         {/* 상단 우측: 카메라 탭 & 오답노트 탭 */}
