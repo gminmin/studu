@@ -58,3 +58,42 @@ export function getAdminAuth() {
 export function getAdminFirestore() {
   return getFirestore(getAdminApp());
 }
+
+export function getFirebaseAdminDiagnostics() {
+  const rawPrivateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY || '';
+  const privateKey = rawPrivateKey.replace(/\\n/g, '\n');
+  const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL || '';
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '';
+  const serviceAccountJson = process.env.FIREBASE_ADMIN_SERVICE_ACCOUNT?.trim() || '';
+  let serviceAccountJsonParseable = false;
+  let serviceAccountHasRequiredFields = false;
+
+  if (serviceAccountJson) {
+    try {
+      const serviceAccount = JSON.parse(serviceAccountJson) as {
+        client_email?: string;
+        private_key?: string;
+      };
+      serviceAccountJsonParseable = true;
+      serviceAccountHasRequiredFields = Boolean(serviceAccount.client_email && serviceAccount.private_key);
+    } catch {
+      // Report only the shape; never expose the secret value.
+    }
+  }
+
+  return {
+    vercel: Boolean(process.env.VERCEL),
+    projectId,
+    projectIdPresent: Boolean(projectId),
+    clientEmailPresent: Boolean(clientEmail),
+    clientEmailDomain: clientEmail.includes('@') ? clientEmail.split('@').pop() : null,
+    privateKeyPresent: Boolean(privateKey),
+    privateKeyLength: privateKey.length,
+    privateKeyHasPemBegin: privateKey.includes('-----BEGIN PRIVATE KEY-----'),
+    privateKeyHasPemEnd: privateKey.includes('-----END PRIVATE KEY-----'),
+    privateKeyHadLiteralEscapes: rawPrivateKey.includes('\\n'),
+    serviceAccountJsonPresent: Boolean(serviceAccountJson),
+    serviceAccountJsonParseable,
+    serviceAccountHasRequiredFields,
+  };
+}
