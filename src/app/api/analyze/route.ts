@@ -5,7 +5,7 @@ import { analyzeProblemWithGemini } from '@/lib/gemini';
 import { SubjectType, AIModelMode } from '@/types/problem';
 import { getAdminFirestore, verifyFirebaseIdToken } from '@/lib/firebase/admin';
 import { ensureWallet, getWalletRef } from '@/lib/firebase/economy';
-import { CREDIT_COST_BY_MODE } from '@/lib/economy';
+import { TOKEN_COST_BY_MODE } from '@/lib/economy';
 
 // 간단한 인메모리 요청 제한 (분당 15회)
 const rateLimitMap = new Map<string, { count: number; expiresAt: number }>();
@@ -27,7 +27,7 @@ function checkRateLimit(ip: string): boolean {
 export async function POST(req: NextRequest) {
   let uid: string | null = null;
   let requestRef: FirebaseFirestore.DocumentReference | null = null;
-  let reservedCost = 0;
+  let reservedTokenCost = 0;
   let ownsReservation = false;
   try {
     const authorization = req.headers.get('authorization');
@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     const db = getAdminFirestore();
     requestRef = db.doc(`users/${uid}/analysisRequests/${requestId}`);
     const walletRef = getWalletRef(uid);
-    reservedCost = CREDIT_COST_BY_MODE[modelMode as AIModelMode];
+    reservedTokenCost = TOKEN_COST_BY_MODE[modelMode as AIModelMode];
     const reservation = await db.runTransaction(async (transaction) => {
       const requestSnapshot = await transaction.get(requestRef!);
       if (requestSnapshot.exists) {
@@ -99,17 +99,17 @@ export async function POST(req: NextRequest) {
         throw new Error(previous?.status === 'pending' ? 'ANALYSIS_ALREADY_RUNNING' : 'ANALYSIS_REQUEST_ALREADY_USED');
       }
       const walletSnapshot = await transaction.get(walletRef);
-      const credits = Number(walletSnapshot.data()?.credits ?? 0);
-      if (credits < reservedCost) throw new Error('INSUFFICIENT_CREDITS');
-      transaction.update(walletRef, { credits: credits - reservedCost, updatedAt: FieldValue.serverTimestamp() });
+      const tokens = Number(walletSnapshot.data()?.tokens ?? 0);
+      if (tokens < reservedTokenCost) throw new Error('INSUFFICIENT_TOKENS');
+      transaction.update(walletRef, { tokens: tokens - reservedTokenCost, updatedAt: FieldValue.serverTimestamp() });
       transaction.set(requestRef!, {
         status: 'pending',
         mode: modelMode,
-        cost: reservedCost,
+        cost: reservedTokenCost,
         createdAt: FieldValue.serverTimestamp(),
       });
       transaction.set(getAdminFirestore().doc(`users/${uid}/walletTransactions/${requestId}`), {
-        currency: 'credits', amount: -reservedCost, reason: 'problem_analysis', referenceId: requestId,
+        currency: 'tokens', amount: -reservedTokenCost, reason: 'problem_analysis', referenceId: requestId,
         createdAt: FieldValue.serverTimestamp(),
       });
       return { duplicate: false as const };
@@ -163,14 +163,14 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
-    if (apiError?.message === 'INSUFFICIENT_CREDITS') {
-      return NextResponse.json({ error: '크레딧이 부족해요. 지갑에서 토큰을 크레딧으로 바꾸거나 나중에 다시 이용해주세요.' }, { status: 402 });
+    if (apiError?.message === 'INSUFFICIENT_TOKENS') {
+      return NextResponse.json({ error: 'AI 분석 토큰이 부족해요. 지갑에서 크레딧으로 토큰을 구매해주세요.' }, { status: 402 });
     }
     if (apiError?.message === 'ANALYSIS_ALREADY_RUNNING' || apiError?.message === 'ANALYSIS_REQUEST_ALREADY_USED') {
       return NextResponse.json({ error: '이 분석 요청은 이미 처리 중이거나 완료됐어요. 다시 분석하려면 새 요청으로 시작해주세요.' }, { status: 409 });
     }
 
-    if (ownsReservation && uid && requestRef && reservedCost > 0) {
+    if (ownsReservation && uid && requestRef && reservedTokenCost > 0) {
       try {
         const db = getAdminFirestore();
         const walletRef = getWalletRef(uid);
@@ -179,10 +179,10 @@ export async function POST(req: NextRequest) {
             transaction.get(requestRef!), transaction.get(walletRef),
           ]);
           if (requestSnapshot.data()?.status !== 'pending') return;
-          const credits = Number(walletSnapshot.data()?.credits ?? 0);
-          transaction.update(walletRef, { credits: credits + reservedCost, updatedAt: FieldValue.serverTimestamp() });
+          const tokens = Number(walletSnapshot.data()?.tokens ?? 0);
+          transaction.update(walletRef, { tokens: tokens + reservedTokenCost, updatedAt: FieldValue.serverTimestamp() });
           transaction.set(db.doc(`users/${uid}/walletTransactions/${requestRef!.id}-refund`), {
-            currency: 'credits', amount: reservedCost, reason: 'analysis_refund', referenceId: requestRef!.id,
+            currency: 'tokens', amount: reservedTokenCost, reason: 'analysis_refund', referenceId: requestRef!.id,
             createdAt: FieldValue.serverTimestamp(),
           });
           transaction.update(requestRef!, { status: 'failed', failedAt: FieldValue.serverTimestamp() });

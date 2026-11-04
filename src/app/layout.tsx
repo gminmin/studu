@@ -1,42 +1,12 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
-
 export const metadata: Metadata = {
-  title: 'tudu - AI 문제 풀이와 오답노트',
-  description: '즉시 정답 대신 3단계 소크라테스식 힌트와 쌍둥이 변형 문제로 완전 학습을 달성하는 AI 튜터 서비스',
-  icons: {
-    icon: '/tudu_icon.svg',
-  },
+  title: 'tudu | 혼자 푸는 힘을 만드는 AI 학습',
+  description: '정답보다 이해하는 힘을 키우는 AI 학습 서비스 tudu.',
+  icons: { icon: '/tudu_icon.svg' },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return (
-    <html lang="ko" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <head>
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css"
-          crossOrigin="anonymous"
-        />
-      </head>
-      <body className="min-h-full flex flex-col bg-slate-50 text-slate-900">
-        {children}
-      </body>
-    </html>
-  );
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  return <html lang="ko"><body className="min-h-screen bg-white text-[#1c2a27]">{children}</body></html>;
 }

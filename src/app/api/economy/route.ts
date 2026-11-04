@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminFirestore, verifyFirebaseIdToken } from '@/lib/firebase/admin';
 import { ensureWallet, getWalletRef, getWalletTransactionRef } from '@/lib/firebase/economy';
+import { CREDITS_PER_TOKEN } from '@/lib/economy';
 import type { SubjectType } from '@/types/problem';
 
 async function authenticatedUid(req: NextRequest) {
@@ -63,42 +64,42 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const uid = await authenticatedUid(req);
-    const { transactionId, credits = 1 } = await req.json();
+    const { transactionId, tokens = 1 } = await req.json();
     if (typeof transactionId !== 'string' || !/^[a-zA-Z0-9_-]{12,80}$/.test(transactionId)) {
-      return NextResponse.json({ error: '환전 요청을 다시 시도해주세요.' }, { status: 400 });
+      return NextResponse.json({ error: '토큰 구매를 다시 시도해주세요.' }, { status: 400 });
     }
-    if (!Number.isInteger(credits) || credits < 1 || credits > 5) {
-      return NextResponse.json({ error: '한 번에 1~5크레딧까지 환전할 수 있어요.' }, { status: 400 });
+    if (!Number.isInteger(tokens) || tokens < 1 || tokens > 5) {
+      return NextResponse.json({ error: '한 번에 1~5토큰까지 구매할 수 있어요.' }, { status: 400 });
     }
     await ensureWallet(uid);
     const db = getAdminFirestore();
     const walletRef = getWalletRef(uid);
     const txRef = getWalletTransactionRef(uid, `exchange-${transactionId}`);
-    const exchanged = await db.runTransaction(async (transaction) => {
+    const purchased = await db.runTransaction(async (transaction) => {
       const [walletSnapshot, previousSnapshot] = await Promise.all([
         transaction.get(walletRef), transaction.get(txRef),
       ]);
       if (previousSnapshot.exists) return walletSnapshot.data();
       const wallet = walletSnapshot.data()!;
-      const tokenCost = credits * 20;
-      if (Number(wallet.tokens || 0) < tokenCost) throw new Error('INSUFFICIENT_TOKENS');
-      const nextWallet = { ...wallet, tokens: Number(wallet.tokens || 0) - tokenCost, credits: Number(wallet.credits || 0) + credits };
+      const creditCost = tokens * CREDITS_PER_TOKEN;
+      if (Number(wallet.credits || 0) < creditCost) throw new Error('INSUFFICIENT_CREDITS');
+      const nextWallet = { ...wallet, credits: Number(wallet.credits || 0) - creditCost, tokens: Number(wallet.tokens || 0) + tokens };
       transaction.update(walletRef, { ...nextWallet, updatedAt: FieldValue.serverTimestamp() });
       transaction.set(txRef, {
-        currency: 'exchange', amount: credits, tokenAmount: -tokenCost, reason: 'token_to_credit_exchange',
+        currency: 'exchange', amount: tokens, creditAmount: -creditCost, reason: 'credit_to_token_exchange',
         createdAt: FieldValue.serverTimestamp(),
       });
       return nextWallet;
     });
-    return NextResponse.json({ wallet: exchanged });
+    return NextResponse.json({ wallet: purchased });
   } catch (error) {
-    if ((error as Error)?.message === 'INSUFFICIENT_TOKENS') {
-      return NextResponse.json({ error: '환전할 토큰이 부족해요.' }, { status: 409 });
+    if ((error as Error)?.message === 'INSUFFICIENT_CREDITS') {
+      return NextResponse.json({ error: 'AI 토큰 구매에 필요한 크레딧이 부족해요.' }, { status: 409 });
     }
     if ((error as Error)?.message === 'UNAUTHORIZED') {
       return NextResponse.json({ error: '로그인이 필요해요.' }, { status: 401 });
     }
     console.error('API /api/economy POST error:', error);
-    return NextResponse.json({ error: '환전을 처리하지 못했어요.' }, { status: 500 });
+    return NextResponse.json({ error: 'AI 토큰을 구매하지 못했어요.' }, { status: 500 });
   }
 }

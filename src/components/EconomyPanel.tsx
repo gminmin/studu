@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { ArrowLeftRight, Coins, Crown, Trophy, X } from 'lucide-react';
-import type { Wallet } from '@/lib/economy';
+import { Coins, Crown, Trophy, X } from 'lucide-react';
+import { CREDITS_PER_TOKEN, type Wallet } from '@/lib/economy';
 
 interface Leader {
   uid: string;
@@ -16,6 +16,7 @@ interface WalletTransaction {
   currency: string;
   amount: number;
   tokenAmount?: number;
+  creditAmount?: number;
   xp?: number;
   reason: string;
 }
@@ -27,9 +28,9 @@ interface EconomyPanelProps {
   rank: number | null;
   transactions: WalletTransaction[];
   error: string | null;
-  isLoading: boolean;
   onClose: () => void;
-  onExchange: (credits: number) => void;
+  isLoading: boolean;
+  onExchange: (tokens: number) => void;
 }
 
 export const EconomyPanel: React.FC<EconomyPanelProps> = ({
@@ -45,15 +46,16 @@ export const EconomyPanel: React.FC<EconomyPanelProps> = ({
         </header>
 
         <div className="grid grid-cols-3 gap-2">
-          <Balance label="크레딧" value={wallet?.credits} detail="AI 분석" />
-          <Balance label="토큰" value={wallet?.tokens} detail="보상·환전" />
+          <Balance label="크레딧" value={wallet?.credits} detail="학습 보상" />
+          <Balance label="토큰" value={wallet?.tokens} detail="AI 분석 비용" />
           <Balance label="XP" value={wallet?.xp} detail={rank ? `${rank}위` : '전체 순위'} />
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 border-y border-slate-300 py-3">
-          <p className="text-sm leading-5 text-slate-600">20토큰을 1크레딧으로 바꿔요.</p>
-          <button type="button" onClick={() => onExchange(1)} disabled={isLoading || (wallet?.tokens ?? 0) < 20} className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-slate-400 px-3 text-sm font-bold disabled:opacity-40"><ArrowLeftRight className="h-4 w-4"/>환전</button>
+          <p className="text-sm leading-5 text-slate-600">{CREDITS_PER_TOKEN}크레딧으로 AI 토큰 1개를 살 수 있어요.</p>
+          <button type="button" onClick={() => onExchange(1)} disabled={isLoading || (wallet?.credits ?? 0) < CREDITS_PER_TOKEN} className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg border border-slate-400 px-3 text-sm font-bold disabled:opacity-40"><Coins className="h-4 w-4"/>토큰 구매</button>
         </div>
+
         {error && <p role="alert" className="mt-3 text-sm font-medium text-red-700">{error}</p>}
 
         <div className="mt-5">
@@ -74,8 +76,10 @@ export const EconomyPanel: React.FC<EconomyPanelProps> = ({
               <span className="min-w-0 flex-1 truncate text-slate-700">{transactionLabel(item.reason)}</span>
               <span className="shrink-0 text-right font-semibold tabular-nums">
                 {item.reason === 'token_to_credit_exchange'
-                  ? `${item.tokenAmount ?? 0}T → +${item.amount}C`
-                  : `${item.amount > 0 ? '+' : ''}${item.amount} ${item.currency === 'credits' ? 'C' : 'T'}${item.xp ? ` · +${item.xp} XP` : ''}`}
+                  ? `-${Math.abs(item.tokenAmount ?? 0)}C → +${item.amount}T`
+                  : item.reason === 'credit_to_token_exchange'
+                    ? `-${Math.abs(item.creditAmount ?? 0)}C → +${item.amount}T`
+                  : `${item.amount > 0 ? '+' : ''}${item.amount} ${transactionCurrency(item)}${item.xp ? ` · +${item.xp} XP` : ''}`}
               </span>
             </li>)}
           </ul> : <p className="text-sm text-slate-500">아직 지갑 내역이 없어요.</p>}
@@ -95,12 +99,23 @@ function Balance({ label, value, detail }: { label: string; value?: number; deta
 
 function transactionLabel(reason: string) {
   const labels: Record<string, string> = {
-    welcome_grant: '가입 환영 크레딧',
-    problem_analysis: '문제 분석',
-    analysis_refund: '분석 실패 환불',
+    welcome_grant: '가입 환영 토큰',
+    problem_analysis: 'AI 문제 분석',
+    analysis_refund: '분석 실패 토큰 환불',
     problem_solved: '문제 정답 보상',
     wrong_note_solved: '오답노트 복습 보상',
-    token_to_credit_exchange: '토큰 환전',
+    token_to_credit_exchange: '통화 변경 전 환전',
+    credit_to_token_exchange: '크레딧으로 AI 토큰 구매',
   };
   return labels[reason] || '지갑 변동';
+}
+
+function transactionCurrency(transaction: WalletTransaction) {
+  if (transaction.reason === 'problem_analysis' || transaction.reason === 'analysis_refund' || transaction.reason === 'welcome_grant') {
+    return 'T';
+  }
+  if (transaction.reason === 'problem_solved' || transaction.reason === 'wrong_note_solved') {
+    return 'C';
+  }
+  return transaction.currency === 'credits' ? 'C' : 'T';
 }

@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { BookOpen, Camera, Calculator, FlaskConical, Microscope, Phone, Sparkles, Trophy, UserRound } from 'lucide-react';
 import type { SubjectType } from '@/types/problem';
-import type { Wallet } from '@/lib/economy';
+import { CREDITS_PER_TOKEN, type Wallet } from '@/lib/economy';
 import { SUBJECT_THEME } from '@/lib/subjects/theme';
 import { PersonalTab } from '@/components/PersonalTab';
 
@@ -55,8 +55,8 @@ export function MainHome({ subject, onSubjectChange, wallet, walletError, rank, 
         {openMenu && <div className="absolute left-0 right-0 top-full z-40 border-y border-slate-300 bg-white px-4 py-3 shadow-[0_8px_18px_rgba(15,23,42,0.12)]">
           {openMenu === 'subject' && <div className="mx-auto flex max-w-2xl items-stretch justify-center gap-3 py-1">{subjects.map(({ id, label, Icon }) => <button key={id} type="button" aria-pressed={subject === id} onClick={() => { onSubjectChange(id); setOpenMenu(null); }} className={`flex min-h-24 w-24 shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border bg-white text-sm font-bold transition-transform ${subject === id ? 'scale-105 border-2 border-teal-600 text-slate-950' : 'border-slate-300 text-slate-700'}`}><span className="flex h-12 w-14 items-center justify-center rounded-xl" style={{ backgroundColor: `${SUBJECT_THEME[id].color}30`, color: SUBJECT_THEME[id].color }}>{id === 'english' ? <span className="text-lg font-black tracking-[-0.08em]">AZ</span> : Icon && <Icon className="h-7 w-7"/>}</span>{label}</button>)}</div>}
           {openMenu === 'rank' && <div className="mx-auto max-w-2xl"><h2 className="mb-2 font-bold">XP 순위</h2><Leaderboard leaders={leaders} /></div>}
-          {openMenu === 'credits' && <div className="mx-auto flex max-w-2xl items-center justify-between gap-3"><p className="text-sm text-slate-600">보유 크레딧 <strong className="text-slate-950">{wallet?.credits ?? '—'}</strong></p><button type="button" onClick={() => { setOpenMenu(null); onOpenStore(); }} className="min-h-11 rounded-xl border border-slate-900 px-4 text-sm font-bold">스토어로 가기</button></div>}
-          {openMenu === 'tokens' && <div className="mx-auto flex max-w-2xl flex-wrap gap-2"><button type="button" disabled={(wallet?.tokens ?? 0) < 20} onClick={onExchange} className="min-h-11 flex-1 rounded-xl border border-slate-900 px-4 text-sm font-bold disabled:opacity-40">크레딧으로 구매 · 20T</button><button type="button" onClick={() => window.alert('광고 보상은 준비 중이에요.')} className="min-h-11 flex-1 rounded-xl border border-slate-300 px-4 text-sm font-bold">광고 시청하여 획득</button></div>}
+          {openMenu === 'credits' && <div className="mx-auto flex max-w-2xl items-center justify-between gap-3"><p className="text-sm text-slate-600">학습 보상 크레딧 <strong className="text-slate-950">{wallet?.credits ?? '—'}</strong></p><button type="button" onClick={() => { setOpenMenu(null); onOpenStore(); }} className="min-h-11 rounded-xl border border-slate-900 px-4 text-sm font-bold">스토어로 가기</button></div>}
+          {openMenu === 'tokens' && <div className="mx-auto flex max-w-2xl flex-wrap items-center gap-2"><p className="min-w-full text-sm text-slate-600">AI 분석에 사용하는 토큰이에요. 보유량: <strong className="text-slate-950">{wallet?.tokens ?? '—'}</strong></p><button type="button" disabled={(wallet?.credits ?? 0) < CREDITS_PER_TOKEN} onClick={onExchange} className="min-h-11 flex-1 rounded-xl border border-slate-900 px-4 text-sm font-bold disabled:opacity-40">크레딧으로 토큰 구매 · {CREDITS_PER_TOKEN}C</button><button type="button" onClick={() => window.alert('광고 보상은 준비 중이에요.')} className="min-h-11 flex-1 rounded-xl border border-slate-300 px-4 text-sm font-bold">광고 시청하여 토큰 획득</button></div>}
         </div>}
       </div>
 

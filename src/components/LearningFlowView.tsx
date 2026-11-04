@@ -14,7 +14,7 @@ interface LearningFlowViewProps {
   onSubmitAnswer: (sessionId: string, answer: string, kind: 'answer' | 'review') => Promise<{
     correct: boolean;
     attemptCount: number;
-    reward: { tokens: number; xp: number } | null;
+    reward: { credits: number; xp: number } | null;
   }>;
   onSolveAlone: () => void;
   onSaveToWrongNote: () => void;
@@ -92,7 +92,7 @@ export const LearningFlowView: React.FC<LearningFlowViewProps> = ({
     setIsSubmitting(true);
     let isCorrect = locallyCorrect;
     let resolvedAttemptCount = nextAttemptCount;
-    let reward: { tokens: number; xp: number } | null = null;
+    let reward: { credits: number; xp: number } | null = null;
     if (data.sessionId) {
       try {
         const response = await onSubmitAnswer(data.sessionId, answer, isReview ? 'review' : 'answer');
@@ -108,7 +108,7 @@ export const LearningFlowView: React.FC<LearningFlowViewProps> = ({
     if (isCorrect) {
       setFeedback('right');
       setSuccessAttemptCount(resolvedAttemptCount);
-      if (reward) setRewardMessage(`+${reward.tokens} 토큰 · +${reward.xp} XP`);
+      if (reward) setRewardMessage(`+${reward.credits} 크레딧 · +${reward.xp} XP`);
       const messages = ['좋아요!', '완벽해요!', '훌륭해요!'];
       setSuccessMessage(messages[Math.floor(Math.random() * messages.length)]);
     } else {

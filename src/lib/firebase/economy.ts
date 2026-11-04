@@ -1,7 +1,7 @@
 import 'server-only';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminAuth, getAdminFirestore } from './admin';
-import { STARTING_CREDITS, type Wallet } from '@/lib/economy';
+import { STARTING_TOKENS, WALLET_CURRENCY_VERSION, type Wallet } from '@/lib/economy';
 
 export function getWalletRef(uid: string) {
   return getAdminFirestore().doc(`users/${uid}/wallet/main`);
@@ -19,26 +19,37 @@ export async function ensureWallet(uid: string): Promise<Wallet> {
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(walletRef);
     const storedWallet = snapshot.data();
-    const wallet: Wallet = snapshot.exists
-      ? {
-          credits: Number(storedWallet?.credits ?? 0),
-          tokens: Number(storedWallet?.tokens ?? 0),
-          xp: Number(storedWallet?.xp ?? 0),
-          subjectXp: {
-            math: Number(storedWallet?.subjectXp?.math ?? 0),
-            science: Number(storedWallet?.subjectXp?.science ?? 0),
-            english: Number(storedWallet?.subjectXp?.english ?? 0),
-          },
-        }
-      : { credits: STARTING_CREDITS, tokens: 0, xp: 0, subjectXp: { math: 0, science: 0, english: 0 } };
+    const storedCurrencyVersion = Number(storedWallet?.currencyVersion ?? 1);
+    const isLegacyWallet = snapshot.exists && (
+      !Number.isFinite(storedCurrencyVersion) || storedCurrencyVersion < WALLET_CURRENCY_VERSION
+    );
+    const wallet: Wallet = {
+      credits: snapshot.exists
+        ? Number((isLegacyWallet ? storedWallet?.tokens : storedWallet?.credits) ?? 0)
+        : 0,
+      tokens: snapshot.exists
+        ? Number((isLegacyWallet ? storedWallet?.credits : storedWallet?.tokens) ?? 0)
+        : STARTING_TOKENS,
+      currencyVersion: WALLET_CURRENCY_VERSION,
+      xp: Number(storedWallet?.xp ?? 0),
+      subjectXp: {
+        math: Number(storedWallet?.subjectXp?.math ?? 0),
+        science: Number(storedWallet?.subjectXp?.science ?? 0),
+        english: Number(storedWallet?.subjectXp?.english ?? 0),
+      },
+    };
     if (!snapshot.exists) {
       transaction.set(walletRef, { ...wallet, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() });
-      transaction.set(getWalletTransactionRef(uid, 'welcome-credits'), {
-        currency: 'credits', amount: STARTING_CREDITS, reason: 'welcome_grant',
+      transaction.set(getWalletTransactionRef(uid, 'welcome-tokens'), {
+        currency: 'tokens', amount: STARTING_TOKENS, reason: 'welcome_grant',
         createdAt: FieldValue.serverTimestamp(),
       });
     } else if (
-      storedWallet?.credits === undefined || storedWallet?.tokens === undefined || storedWallet?.xp === undefined || storedWallet?.subjectXp === undefined
+      isLegacyWallet ||
+      storedWallet?.credits === undefined ||
+      storedWallet?.tokens === undefined ||
+      storedWallet?.xp === undefined ||
+      storedWallet?.subjectXp === undefined
     ) {
       transaction.set(walletRef, { ...wallet, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminFirestore, verifyFirebaseIdToken } from '@/lib/firebase/admin';
 import { ensureWallet, getWalletRef } from '@/lib/firebase/economy';
-import { REWARD_RULES } from '@/lib/economy';
+import { REWARD_RULES, WALLET_CURRENCY_VERSION } from '@/lib/economy';
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
       const baseWallet = {
         credits: Number(wallet.credits || 0),
         tokens: Number(wallet.tokens || 0),
+        currencyVersion: Number(wallet.currencyVersion ?? WALLET_CURRENCY_VERSION),
         xp: Number(wallet.xp || 0),
         subjectXp: {
           math: Number(wallet.subjectXp?.math || 0),
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
           : nextAttempt === 1 ? REWARD_RULES.firstTry : REWARD_RULES.secondTry
         : null;
       const updatedWallet = reward
-        ? { ...baseWallet, tokens: baseWallet.tokens + reward.tokens, xp: baseWallet.xp + reward.xp, subjectXp: { ...baseWallet.subjectXp, [subject]: baseWallet.subjectXp[subject] + reward.xp } }
+        ? { ...baseWallet, credits: baseWallet.credits + reward.credits, xp: baseWallet.xp + reward.xp, subjectXp: { ...baseWallet.subjectXp, [subject]: baseWallet.subjectXp[subject] + reward.xp } }
         : baseWallet;
 
       transaction.update(sessionRef, {
@@ -73,9 +74,9 @@ export async function POST(req: NextRequest) {
         updatedAt: FieldValue.serverTimestamp(),
       });
       if (reward) {
-        transaction.update(walletRef, { tokens: updatedWallet.tokens, xp: updatedWallet.xp, subjectXp: updatedWallet.subjectXp, updatedAt: FieldValue.serverTimestamp() });
+        transaction.update(walletRef, { credits: updatedWallet.credits, xp: updatedWallet.xp, subjectXp: updatedWallet.subjectXp, updatedAt: FieldValue.serverTimestamp() });
         transaction.set(db.doc(`users/${uid}/walletTransactions/${isReview ? 'review' : 'solve'}-${sessionId}`), {
-          currency: 'tokens', amount: reward.tokens, xp: reward.xp,
+          currency: 'credits', amount: reward.credits, xp: reward.xp,
           reason: isReview ? 'wrong_note_solved' : 'problem_solved', referenceId: sessionId,
           createdAt: FieldValue.serverTimestamp(),
         });

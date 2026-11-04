@@ -1,797 +1,367 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import {
-  GoogleAuthProvider,
-  onAuthStateChanged,
-  getRedirectResult,
-  signInWithRedirect,
-  signInWithEmailAndPassword,
-  sendSignInLinkToEmail,
-  signInWithEmailLink,
-  isSignInWithEmailLink,
-  updatePassword,
-  sendPasswordResetEmail,
-  updateProfile,
-  reload,
-  signOut,
-  type User,
-} from 'firebase/auth';
-import {
-  SubjectType,
-  StandardProblemResponse,
-  WrongNoteItem,
-  MistakeReason,
-} from '@/types/problem';
-import { MobileScanView } from '@/components/MobileScanView';
-import { LearningFlowView } from '@/components/LearningFlowView';
-import { WrongNoteView } from '@/components/WrongNoteView';
-import { TwinProblemModal } from '@/components/TwinProblemModal';
-import { AuthScreen } from '@/components/AuthScreen';
-import { EconomyPanel } from '@/components/EconomyPanel';
-import { MainHome, type MainTab } from '@/components/MainHome';
-import { auth, firebaseConfigured } from '@/lib/firebase/client';
-import type { Wallet } from '@/lib/economy';
-import { WifiOff, X } from 'lucide-react';
+  ArrowRight,
+  Calculator,
+  Check,
+  Lightbulb,
+  Microscope,
+  RotateCcw,
+  ScanLine,
+  Sparkles,
+  X,
+} from 'lucide-react';
+import { useState } from 'react';
+import { SUBJECT_THEME } from '@/lib/subjects/theme';
 
-type AppStep = 'scan' | 'hints' | 'solution';
-type SignupStage = 'sent' | 'confirm' | 'password' | 'nickname' | null;
-type EconomyLeader = { uid: string; rank: number; displayName: string; xp: number; isMe: boolean };
-type WalletTransaction = { id: string; currency: string; amount: number; tokenAmount?: number; xp?: number; reason: string };
+type SubjectId = 'english' | 'math' | 'science';
 
-export default function Home() {
-  const [mainTab, setMainTab] = useState<MainTab>('home');
-  const [isScanOpen, setIsScanOpen] = useState(false);
-  const [isScanExitConfirmOpen, setIsScanExitConfirmOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'scan' | 'wrongNote'>('scan');
-  const [learningReturnTab, setLearningReturnTab] = useState<'scan' | 'wrongNote'>('scan');
-  const [currentStep, setCurrentStep] = useState<AppStep>('scan');
-  const [currentSubject, setCurrentSubject] = useState<SubjectType>('math');
+type SubjectData = {
+  label: string;
+  title: string;
+  prompt: string;
+  options: string[];
+  answer: string;
+  hint: string;
+  explanation: string;
+};
 
-  // 네트워크 오프라인 상태 관리
-  const [isOffline, setIsOffline] = useState<boolean>(false);
-  const [networkErrorMsg, setNetworkErrorMsg] = useState<string | null>(null);
+const subjects: Record<SubjectId, SubjectData> = {
+  english: {
+    label: '영어',
+    title: '인사하는 말',
+    prompt: '처음 만난 사람에게 자연스럽게 건넬 수 있는 인사는?',
+    options: ['Good morning!', 'Good night!', 'See you later!'],
+    answer: 'Good morning!',
+    hint: '아침에 만났을 때 건네는 말이에요.',
+    explanation: 'Good morning!은 아침에 만났을 때 쓰는 자연스러운 인사예요.',
+  },
+  math: {
+    label: '수학',
+    title: '분수의 곱셈',
+    prompt: '다음 계산의 값은 얼마일까요?  2/3 × 3/4',
+    options: ['1/2', '2/7', '5/12'],
+    answer: '1/2',
+    hint: '분자는 분자끼리, 분모는 분모끼리 곱해보세요.',
+    explanation: '분자는 2×3, 분모는 3×4로 계산한 뒤 약분하면 1/2가 돼요.',
+  },
+  science: {
+    label: '과학',
+    title: '물의 화학식 이해',
+    prompt: '수소 원자 2개와 산소 원자 1개로 이루어진 물의 화학식은?',
+    options: ['CO₂', 'H₂O', 'O₂'],
+    answer: 'H₂O',
+    hint: '수소의 기호는 H, 산소의 기호는 O예요.',
+    explanation: 'H₂O에서 아래 첨자 2는 수소 원자가 2개라는 뜻이에요.',
+  },
+};
 
-  // 분석 결과 데이터
-  const [problemData, setProblemData] = useState<StandardProblemResponse | null>(null);
-  const [isSolvedAlone, setIsSolvedAlone] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-
-  // 모달 상태
-  const [isAuthScreenOpen, setIsAuthScreenOpen] = useState<boolean>(true);
-  const [signupStage, setSignupStage] = useState<SignupStage>(null);
-  const [signupEmail, setSignupEmail] = useState('');
-  const [isTwinModalOpen, setIsTwinModalOpen] = useState<boolean>(false);
-  const [activeTwinProblem, setActiveTwinProblem] = useState<{
-    problem: StandardProblemResponse['twinProblem'];
-    topic: string;
-    noteId?: string;
-  } | null>(null);
-
-  const [user, setUser] = useState<User | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
-  const [isAuthActionLoading, setIsAuthActionLoading] = useState<boolean>(false);
-  const [authError, setAuthError] = useState<string | null>(null);
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
-
-  // 오답노트 상태
-  const [wrongNotes, setWrongNotes] = useState<WrongNoteItem[]>([]);
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [leaders, setLeaders] = useState<EconomyLeader[]>([]);
-  const [walletRank, setWalletRank] = useState<number | null>(null);
-  const [walletOverallRank, setWalletOverallRank] = useState<number | null>(null);
-  const [walletTransactions, setWalletTransactions] = useState<WalletTransaction[]>([]);
-  const [isEconomyPanelOpen, setIsEconomyPanelOpen] = useState(false);
-  const [isEconomyLoading, setIsEconomyLoading] = useState(false);
-  const [economyError, setEconomyError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const savedSubject = localStorage.getItem('tudu_default_subject');
-    if (savedSubject === 'math' || savedSubject === 'science' || savedSubject === 'english') {
-      queueMicrotask(() => setCurrentSubject(savedSubject));
-    }
-  }, []);
-
-  const handleSubjectPreferenceChange = useCallback((subject: SubjectType) => {
-    setCurrentSubject(subject);
-    localStorage.setItem('tudu_default_subject', subject);
-  }, []);
-
-  const refreshEconomy = useCallback(async (currentUser: User) => {
-    const response = await fetch(`/api/economy?subject=${currentSubject}`, {
-      headers: { Authorization: `Bearer ${await currentUser.getIdToken()}` },
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || '지갑 정보를 불러오지 못했어요.');
-    setEconomyError(null);
-    setWallet(data.wallet);
-    setLeaders(data.leaders || []);
-    setWalletRank(data.rank ?? null);
-    setWalletOverallRank(data.overallRank ?? null);
-    setWalletTransactions(data.transactions || []);
-    return data;
-  }, [currentSubject]);
-
-  const getCurrentIdToken = useCallback(() => user?.getIdToken() ?? Promise.resolve(''), [user]);
-
-  useEffect(() => {
-    if (!user) {
-      queueMicrotask(() => {
-        setWallet(null);
-        setLeaders([]);
-        setWalletRank(null);
-        setWalletOverallRank(null);
-        setWalletTransactions([]);
-      });
-      return;
-    }
-    let active = true;
-    queueMicrotask(() => {
-      if (!active) return;
-      void refreshEconomy(user).catch((error: unknown) => {
-        if (active) setEconomyError((error as Error).message || '지갑 정보를 불러오지 못했어요.');
-      });
-    });
-    return () => { active = false; };
-  }, [user, refreshEconomy]);
-
-  const handleCompleteEmailLink = useCallback(async (email: string) => {
-    if (!auth || typeof window === 'undefined') {
-      setAuthError('인증 링크가 유효하지 않거나 만료됐어요. 인증 메일을 다시 요청해 주세요.');
-      return;
-    }
-    setAuthError(null);
-    setIsAuthActionLoading(true);
-    try {
-      const pendingEmailLink = isSignInWithEmailLink(auth, window.location.href);
-      if (pendingEmailLink) {
-        await signInWithEmailLink(auth, email, window.location.href);
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } else if (auth.currentUser?.email !== email) {
-        throw new Error('인증 링크가 유효하지 않거나 만료됐어요. 인증 메일을 다시 요청해 주세요.');
-      }
-      if (!auth.currentUser) throw new Error('인증 후 계정을 확인하지 못했어요.');
-      localStorage.removeItem('tudu_signup_email');
-      localStorage.setItem('tudu_signup_stage', 'password');
-      setSignupEmail(email);
-      setSignupStage('password');
-      setAuthError(null);
-      setIsAuthScreenOpen(true);
-    } catch (error) {
-      setAuthError(getAuthErrorMessage(error));
-    } finally {
-      setIsAuthActionLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!auth) {
-      queueMicrotask(() => setIsAuthLoading(false));
-      return;
-    }
-    let active = true;
-    getRedirectResult(auth).catch((error) => {
-      if (active) setAuthError(getAuthErrorMessage(error));
-    });
-    if (isSignInWithEmailLink(auth, window.location.href)) {
-      const savedEmail = localStorage.getItem('tudu_signup_email');
-      if (savedEmail) {
-        queueMicrotask(() => {
-          if (!active) return;
-          setSignupEmail(savedEmail);
-          setSignupStage('confirm');
-          setIsAuthScreenOpen(true);
-          void handleCompleteEmailLink(savedEmail);
-        });
-      } else {
-        queueMicrotask(() => {
-          if (!active) return;
-          if (savedEmail) setSignupEmail(savedEmail);
-          setSignupStage('confirm');
-          setIsAuthScreenOpen(true);
-        });
-      }
-    }
-    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
-      if (!active) return;
-      setUser(nextUser);
-      setIsAuthLoading(false);
-      const stage = localStorage.getItem('tudu_signup_stage');
-      if (stage === 'password' || stage === 'nickname') {
-        setSignupStage(stage);
-        setSignupEmail(nextUser?.email ?? localStorage.getItem('tudu_signup_email') ?? '');
-        setIsAuthScreenOpen(true);
-      } else if (stage === 'sent' || stage === 'confirm') {
-        setIsAuthScreenOpen(true);
-      } else {
-        setIsAuthScreenOpen(!nextUser);
-      }
-    });
-    return () => {
-      active = false;
-      unsubscribe();
-    };
-  }, [handleCompleteEmailLink]);
-
-  // 네트워크 상태 감지 리스너
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOffline(false);
-      setNetworkErrorMsg(null);
-    };
-    const handleOffline = () => {
-      setIsOffline(true);
-      setNetworkErrorMsg('네트워크가 연결되지 않았습니다. 인터넷 연결을 확인해주세요.');
-    };
-
-    if (typeof window !== 'undefined') {
-      queueMicrotask(() => setIsOffline(!navigator.onLine));
-      window.addEventListener('online', handleOnline);
-      window.addEventListener('offline', handleOffline);
-    }
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-
-  // 로컬 스토리지 로드
-  useEffect(() => {
-    localStorage.removeItem('gemini_custom_api_key');
-    const savedNotes = localStorage.getItem('solvify_wrong_notes');
-    if (savedNotes) {
-      try {
-        const parsedNotes = JSON.parse(savedNotes) as WrongNoteItem[];
-        queueMicrotask(() => setWrongNotes(parsedNotes));
-      } catch (e) {
-        console.warn('Failed to parse saved notes', e);
-      }
-    }
-  }, []);
-
-  const handleSignIn = async () => {
-    if (!auth) return;
-    setAuthError(null);
-    setAuthMessage(null);
-    setIsAuthActionLoading(true);
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithRedirect(auth, provider);
-    } catch (error) {
-      setAuthError(getAuthErrorMessage(error));
-      setIsAuthActionLoading(false);
-    }
-  };
-
-  const handleEmailSignIn = async (email: string, password: string) => {
-    if (!auth) return;
-    setAuthError(null);
-    setAuthMessage(null);
-    setIsAuthActionLoading(true);
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      setSignupStage(null);
-      setIsAuthScreenOpen(false);
-    } catch (error) {
-      setAuthError(getAuthErrorMessage(error));
-    } finally {
-      setIsAuthActionLoading(false);
-    }
-  };
-
-  const handleSendEmailLink = async (email: string) => {
-    if (!auth) return;
-    setAuthError(null);
-    setAuthMessage(null);
-    setIsAuthActionLoading(true);
-    try {
-      await sendSignInLinkToEmail(auth, email, {
-        url: `${window.location.origin}/?signup=email`,
-        handleCodeInApp: true,
-      });
-      localStorage.setItem('tudu_signup_email', email);
-      localStorage.setItem('tudu_signup_stage', 'sent');
-      setAuthError(null);
-      setSignupEmail(email);
-      setSignupStage('sent');
-      setIsAuthScreenOpen(true);
-    } catch (error) {
-      console.error('[tudu auth] Email link send failed', error);
-      setAuthError(getAuthErrorMessage(error));
-    } finally {
-      setIsAuthActionLoading(false);
-    }
-  };
-
-  const handleSetSignupPassword = async (password: string) => {
-    if (!auth?.currentUser) return false;
-    setAuthError(null);
-    setIsAuthActionLoading(true);
-    try {
-      await updatePassword(auth.currentUser, password);
-      localStorage.setItem('tudu_signup_stage', 'nickname');
-      setSignupStage('nickname');
-      return true;
-    } catch (error) {
-      setAuthError(getAuthErrorMessage(error));
-      return false;
-    } finally {
-      setIsAuthActionLoading(false);
-    }
-  };
-
-  const handleSetSignupNickname = async (nickname: string) => {
-    if (!auth?.currentUser) return false;
-    setAuthError(null);
-    setIsAuthActionLoading(true);
-    try {
-      await updateProfile(auth.currentUser, { displayName: nickname });
-      await reload(auth.currentUser);
-      setUser(auth.currentUser);
-      localStorage.removeItem('tudu_signup_email');
-      localStorage.removeItem('tudu_signup_stage');
-      setSignupStage(null);
-      setIsAuthScreenOpen(false);
-      return true;
-    } catch (error) {
-      setAuthError(getAuthErrorMessage(error));
-      return false;
-    } finally {
-      setIsAuthActionLoading(false);
-    }
-  };
-
-  const handleCancelSignup = () => {
-    localStorage.removeItem('tudu_signup_email');
-    localStorage.removeItem('tudu_signup_stage');
-    setSignupStage(null);
-    setSignupEmail('');
-    setAuthError(null);
-    setIsAuthScreenOpen(!user);
-  };
-
-  const handlePasswordReset = async (email: string) => {
-    if (!auth) return;
-    setAuthError(null);
-    setAuthMessage(null);
-    setIsAuthActionLoading(true);
-    try {
-      await sendPasswordResetEmail(auth, email);
-      setAuthMessage('비밀번호 재설정 이메일을 보냈어요. 받은 편지함을 확인해주세요.');
-    } catch (error) {
-      setAuthError(getAuthErrorMessage(error));
-    } finally {
-      setIsAuthActionLoading(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    if (!auth) return;
-    setIsAuthActionLoading(true);
-    setAuthError(null);
-    setAuthMessage(null);
-    try {
-      await signOut(auth);
-      setSignupStage(null);
-      setIsAuthScreenOpen(false);
-    } catch {
-      setAuthError('로그아웃하지 못했어요. 다시 시도해주세요.');
-    } finally {
-      setIsAuthActionLoading(false);
-    }
-  };
-
-  const handleSubmitLearningAnswer = async (
-    sessionId: string,
-    answer: string,
-    kind: 'answer' | 'review',
-  ) => {
-    if (!user) throw new Error('로그인이 필요해요.');
-    const response = await fetch('/api/rewards', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${await user.getIdToken()}`,
-      },
-      body: JSON.stringify({ sessionId, answer, kind }),
-    });
-    const data = await response.json();
-    if (data.wallet) setWallet(data.wallet);
-    if (!response.ok) throw new Error(data.error || '답안 확인에 실패했어요.');
-    await refreshEconomy(user);
-    return data as { correct: boolean; attemptCount: number; reward: { tokens: number; xp: number } | null };
-  };
-
-  const handleExchangeCredits = async (credits: number) => {
-    if (!user) return;
-    setIsEconomyLoading(true);
-    setEconomyError(null);
-    try {
-      const response = await fetch('/api/economy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${await user.getIdToken()}`,
-        },
-        body: JSON.stringify({ transactionId: crypto.randomUUID(), credits }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || '환전을 처리하지 못했어요.');
-      setWallet(data.wallet);
-      await refreshEconomy(user);
-    } catch (error) {
-      setEconomyError((error as Error).message || '환전을 처리하지 못했어요.');
-    } finally {
-      setIsEconomyLoading(false);
-    }
-  };
-
-  const handleExchangeOneCredit = () => {
-    void handleExchangeCredits(1);
-  };
-
-  const saveWrongNotes = (updated: WrongNoteItem[]) => {
-    setWrongNotes(updated);
-    localStorage.setItem('solvify_wrong_notes', JSON.stringify(updated));
-  };
-
-  const handleStartAnalysis = async (params: {
-    imageBase64?: string;
-    imageMimeType?: string;
-    problemText?: string;
-    userContext?: string;
-  }) => {
-    setLearningReturnTab('scan');
-    setNetworkErrorMsg(null);
-
-    if (!user) {
-      setAuthError('문제를 분석하려면 로그인해주세요.');
-      setIsAuthScreenOpen(true);
-      return;
-    }
-
-    if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      setIsOffline(true);
-      setNetworkErrorMsg('네트워크가 연결되지 않았습니다. 인터넷 연결을 확인해주세요.');
-      alert('네트워크가 연결되지 않았습니다. 인터넷 연결을 확인해주세요.');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      const res = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(user ? { Authorization: `Bearer ${await user.getIdToken()}` } : {}),
-        },
-        body: JSON.stringify({
-          subject: currentSubject,
-          modelMode: 'speed',
-          imageBase64: params.imageBase64,
-          imageMimeType: params.imageMimeType,
-          problemText: params.problemText,
-          userContext: params.userContext,
-          requestId: crypto.randomUUID(),
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        if (res.status === 402) {
-          setEconomyError(data.error || '크레딧이 부족해요.');
-          setIsEconomyPanelOpen(true);
-          return;
-        }
-        throw new Error(data.error || '문제 분석 실패');
-      }
-
-      setProblemData(data);
-      void refreshEconomy(user).catch(() => undefined);
-      setIsSolvedAlone(false);
-      setCurrentStep('hints');
-    } catch (err: unknown) {
-      const error = err as { name?: string; message?: string };
-      console.error('Analysis error:', err);
-      const isFetchNetworkError =
-        error?.name === 'TypeError' ||
-        error?.message?.includes('Failed to fetch') ||
-        error?.message?.includes('NetworkError');
-
-      if (isFetchNetworkError || (typeof navigator !== 'undefined' && !navigator.onLine)) {
-        setIsOffline(true);
-        const msg = '네트워크가 연결되지 않았습니다. 인터넷 연결을 확인해주세요.';
-        setNetworkErrorMsg(msg);
-        alert(msg);
-      } else {
-        alert(error.message || '문제 분석 중 오류가 발생했습니다.');
-      }
-    } finally {
-      setIsLoading(false);
-      if (user) void refreshEconomy(user).catch(() => undefined);
-    }
-  };
-
-  const handleSolveAlone = () => {
-    setIsSolvedAlone(true);
-  };
-
-  const handleSaveToWrongNote = (reason: MistakeReason) => {
-    if (!problemData) return;
-
-    const newNote: WrongNoteItem = {
-      id: `note-${Date.now()}`,
-      ...problemData,
-      status: isSolvedAlone ? 'solved_alone' : 'viewed_solution',
-      mistakeReason: reason,
-      createdAt: new Date().toISOString(),
-    };
-
-    const updated = [newNote, ...wrongNotes.filter((n) => n.extractedText !== problemData.extractedText)];
-    saveWrongNotes(updated);
-  };
-
-  const handleOpenCurrentTwinProblem = () => {
-    if (!problemData) return;
-    setActiveTwinProblem({
-      problem: problemData.twinProblem,
-      topic: problemData.topic,
-    });
-    setIsTwinModalOpen(true);
-  };
-
-  const handleOpenNoteTwinProblem = (note: WrongNoteItem) => {
-    setActiveTwinProblem({
-      problem: note.twinProblem,
-      topic: note.topic,
-      noteId: note.id,
-    });
-    setIsTwinModalOpen(true);
-  };
-
-  const handleTwinMasterSuccess = () => {
-    if (!activeTwinProblem) return;
-
-    if (activeTwinProblem.noteId) {
-      const updated = wrongNotes.map((n) =>
-        n.id === activeTwinProblem.noteId ? { ...n, status: 'mastered' as const, twinSolved: true } : n
-      );
-      saveWrongNotes(updated);
-    } else if (problemData) {
-      const existing = wrongNotes.find((n) => n.extractedText === problemData.extractedText);
-      if (existing) {
-        const updated = wrongNotes.map((n) =>
-          n.id === existing.id ? { ...n, status: 'mastered' as const, twinSolved: true } : n
-        );
-        saveWrongNotes(updated);
-      } else {
-        const newNote: WrongNoteItem = {
-          id: `note-${Date.now()}`,
-          ...problemData,
-          status: 'mastered',
-          mistakeReason: 'concept',
-          createdAt: new Date().toISOString(),
-          twinSolved: true,
-        };
-        saveWrongNotes([newNote, ...wrongNotes]);
-      }
-    }
-  };
-
-  const handleSelectNoteDetail = (note: WrongNoteItem) => {
-    setLearningReturnTab('wrongNote');
-    setProblemData(note);
-    setCurrentSubject(note.subject);
-    setIsSolvedAlone(note.status === 'solved_alone');
-    setCurrentStep('hints');
-    setActiveTab('scan');
-  };
-
-  const handleDeleteNote = (id: string) => {
-    const updated = wrongNotes.filter((n) => n.id !== id);
-    saveWrongNotes(updated);
-  };
-
-  const handleExitLearning = () => {
-    setCurrentStep('scan');
-    setActiveTab(learningReturnTab);
-    setMainTab('home');
-    setIsScanOpen(false);
-  };
-
-  const isLearning = activeTab === 'scan' && (currentStep === 'hints' || currentStep === 'solution') && Boolean(problemData);
+function SubjectIcon({ subject }: { subject: SubjectId }) {
+  const color = SUBJECT_THEME[subject].color;
 
   return (
-      <div className="fixed inset-0 flex h-dvh w-full flex-col overflow-hidden bg-white text-slate-900">
-      {/* ⚠️ 네트워크 연결 끊김 글로벌 알림 배너 */}
-      {user && (isOffline || networkErrorMsg) && (
-        <div className="z-50 flex shrink-0 items-center justify-center gap-2 border-b border-slate-900 bg-slate-900 px-4 py-2 text-center text-sm font-bold text-white">
-          <WifiOff className="w-3.5 h-3.5 shrink-0" />
-          <span>{networkErrorMsg || '네트워크가 연결되지 않았습니다. 인터넷 연결을 확인해주세요.'}</span>
-        </div>
+    <span
+      aria-hidden="true"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+      style={{ backgroundColor: `${color}30`, color }}
+    >
+      {subject === 'english' ? (
+        <span className="text-sm font-black tracking-[-0.08em]">AZ</span>
+      ) : subject === 'science' ? (
+        <Microscope className="h-5 w-5" />
+      ) : (
+        <Calculator className="h-5 w-5" />
       )}
-
-      {/* 모바일 상단 미니 바 */}
-      {user && !isLearning && !isScanOpen && activeTab === 'scan' && <MainHome
-        subject={currentSubject}
-        onSubjectChange={handleSubjectPreferenceChange}
-        wallet={wallet}
-        walletError={economyError}
-        rank={walletRank}
-        overallRank={walletOverallRank}
-        displayName={user.displayName || 'tudu 학습자'}
-        email={user.email || ''}
-        userId={user.uid}
-        idToken={getCurrentIdToken}
-        leaders={leaders}
-        activeTab={mainTab}
-        onTabChange={setMainTab}
-        onStartScan={() => {
-          setActiveTab('scan');
-          setCurrentStep('scan');
-          setMainTab('home');
-          setIsScanOpen(true);
-        }}
-        onStartCall={() => window.alert('?? ??? ?? ????.')}
-        onOpenWrongNotes={() => setActiveTab('wrongNote')}
-        onOpenStore={() => setMainTab('personal')}
-        onExchange={handleExchangeOneCredit}
-        onSignOut={handleSignOut}
-      />}
-
-      {user && !isLearning && isScanOpen && <main className="relative min-h-0 flex-1 overflow-hidden">
-        <MobileScanView
-          currentSubject={currentSubject}
-          onStartAnalysis={handleStartAnalysis}
-          isLoading={isLoading}
-          isOffline={isOffline}
-        />
-        <button type="button" onClick={() => setIsScanExitConfirmOpen(true)} aria-label="나가기" className="absolute left-4 top-3 z-30 flex min-h-11 min-w-11 items-center justify-center text-white active:opacity-70"><X className="h-7 w-7" strokeWidth={2.8} /></button>
-        {isScanExitConfirmOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 p-5">
-          <section role="dialog" aria-modal="true" aria-labelledby="scan-exit-title" className="w-full max-w-sm rounded-2xl border border-slate-900 bg-white p-5 text-slate-950">
-            <h2 id="scan-exit-title" className="text-lg font-extrabold">촬영을 나갈까요?</h2>
-            <p className="mt-2 text-sm leading-5 text-slate-600">계속 촬영하거나 학습 홈으로 돌아갈 수 있어요.</p>
-            <div className="mt-5 grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => setIsScanExitConfirmOpen(false)} className="min-h-12 rounded-xl border border-slate-400 px-3 text-sm font-bold">계속하기</button>
-              <button type="button" onClick={() => { setIsScanExitConfirmOpen(false); setIsScanOpen(false); }} className="min-h-12 rounded-xl border border-slate-900 bg-slate-900 px-3 text-sm font-bold text-white">나가기</button>
-            </div>
-          </section>
-        </div>}
-      </main>}
-
-      {user && isLearning && <main className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden">
-        <div className="relative min-h-0 w-full flex-1">
-          <div className="h-full w-full overflow-hidden">
-            <LearningFlowView
-              data={problemData!}
-              isReview={learningReturnTab === 'wrongNote'}
-              onSubmitAnswer={handleSubmitLearningAnswer}
-              onSolveAlone={handleSolveAlone}
-              onSaveToWrongNote={() => handleSaveToWrongNote('concept')}
-              onOpenTwinProblem={handleOpenCurrentTwinProblem}
-              onExit={handleExitLearning}
-            />
-          </div>
-        </div>
-      </main>}
-
-      {user && !isLearning && mainTab === 'home' && activeTab === 'wrongNote' && <main className="min-h-0 flex-1 overflow-y-auto pb-20">
-        <div className="min-h-0 w-full flex-1 overflow-y-auto overscroll-contain p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] sm:p-4">
-          <button type="button" onClick={() => setActiveTab('scan')} className="mb-3 min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-bold">← 학습 홈</button>
-          <WrongNoteView
-            notes={wrongNotes}
-            onDeleteNote={handleDeleteNote}
-            onOpenTwin={handleOpenNoteTwinProblem}
-            onSelectNoteDetail={handleSelectNoteDetail}
-          />
-        </div>
-      </main>}
-
-      <AuthScreen
-        isOpen={isAuthScreenOpen}
-        user={user}
-        signupStage={signupStage}
-        signupEmail={signupEmail}
-        isLoading={isAuthLoading || isAuthActionLoading}
-        error={authError}
-        message={authMessage}
-        isConfigured={firebaseConfigured}
-        onGoogleSignIn={handleSignIn}
-        onEmailSignIn={handleEmailSignIn}
-        onSendEmailLink={handleSendEmailLink}
-        onCompleteEmailLink={handleCompleteEmailLink}
-        onSetPassword={handleSetSignupPassword}
-        onSetNickname={handleSetSignupNickname}
-        onPasswordReset={handlePasswordReset}
-        onCancelSignup={handleCancelSignup}
-        onSignOut={handleSignOut}
-      />
-
-      <EconomyPanel
-        isOpen={isEconomyPanelOpen}
-        wallet={wallet}
-        leaders={leaders}
-        rank={walletRank}
-        transactions={walletTransactions}
-        error={economyError}
-        isLoading={isEconomyLoading}
-        onClose={() => setIsEconomyPanelOpen(false)}
-        onExchange={handleExchangeCredits}
-      />
-
-      {/* 모달 2: 쌍둥이 변형 문제 (Twin Problem) */}
-      {activeTwinProblem && (
-        <TwinProblemModal
-          isOpen={isTwinModalOpen}
-          onClose={() => setIsTwinModalOpen(false)}
-          twinProblem={activeTwinProblem.problem}
-          topic={activeTwinProblem.topic}
-          onMasterSuccess={handleTwinMasterSuccess}
-        />
-      )}
-    </div>
+    </span>
   );
 }
 
-function getAuthErrorMessage(error: unknown): string {
-  const authFailure = error as {
-    code?: string;
-    message?: string;
-    errorInfo?: { code?: string; message?: string };
-    customData?: { _tokenResponse?: { error?: { message?: string } } };
-  } | null;
-  const code = authFailure?.code ?? authFailure?.errorInfo?.code;
-  if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
-    return '로그인을 취소했어요.';
-  }
-  if (code === 'auth/popup-blocked') {
-    return '브라우저가 로그인 창을 차단했어요. 다시 시도해주세요.';
-  }
-  if (code === 'auth/unauthorized-domain') {
-    return '이 도메인은 Firebase 로그인에 등록되지 않았어요. Firebase 승인 도메인을 확인해주세요.';
-  }
-  if (code === 'auth/account-exists-with-different-credential') {
-    return '이 이메일은 다른 로그인 방식으로 가입되어 있어요.';
-  }
-  if (code === 'auth/operation-not-allowed') {
-    return '이메일 인증 로그인이 꺼져 있어요. Firebase Authentication의 이메일/비밀번호와 이메일 링크 제공자를 모두 켜주세요.';
-  }
-  if (code === 'auth/email-already-in-use') {
-    return '이미 가입된 이메일이에요. 로그인하거나 비밀번호를 재설정해주세요.';
-  }
-  if (code === 'auth/invalid-email') {
-    return '이메일 주소를 확인해주세요.';
-  }
-  if (code === 'auth/invalid-action-code' || code === 'auth/expired-action-code') {
-    return '인증 링크가 이미 사용됐거나 만료됐어요. 인증 이메일을 다시 보내주세요.';
-  }
-  if (code === 'auth/unauthorized-continue-uri' || code === 'auth/invalid-continue-uri') {
-    return '인증 링크 도메인이 Firebase 승인 도메인에 등록되지 않았어요. 현재 사이트 도메인을 추가해주세요.';
-  }
-  if (code === 'auth/missing-email') {
-    return '인증에 사용할 이메일 주소를 입력해주세요.';
-  }
-  if (code === 'auth/requires-recent-login') {
-    return '인증 세션이 만료됐어요. 이메일 인증 링크를 다시 열어주세요.';
-  }
-  if (code === 'auth/weak-password') {
-    return '비밀번호는 6자 이상으로 설정해주세요.';
-  }
-  if (code === 'auth/invalid-credential' || code === 'auth/user-not-found' || code === 'auth/wrong-password') {
-    return '이메일 또는 비밀번호가 맞지 않아요.';
-  }
-  if (code === 'auth/too-many-requests') {
-    return '시도 횟수가 많아요. 잠시 후 다시 시도해주세요.';
-  }
-  if (code === 'auth/quota-exceeded') {
-    return '오늘 보낼 수 있는 이메일 인증 링크 한도에 도달했어요. 한도가 초기화된 뒤 다시 시도하거나 Firebase 요금제를 확인해주세요.';
-  }
-  const detail = authFailure?.message ?? authFailure?.errorInfo?.message ?? authFailure?.customData?._tokenResponse?.error?.message;
-  return code
-    ? `인증 처리에 실패했어요. 오류 코드: ${code}`
-    : detail
-      ? `인증 처리에 실패했어요. ${detail}`
-      : '인증 요청이 Firebase에서 거절됐어요. Firebase Console의 승인 도메인과 이메일 링크 로그인 설정을 확인해주세요.';
+function SubjectExercise({
+  id,
+  data,
+  selected,
+  onSelect,
+  onReset,
+}: {
+  id: SubjectId;
+  data: SubjectData;
+  selected: string | null;
+  onSelect: (value: string) => void;
+  onReset: () => void;
+}) {
+  const color = SUBJECT_THEME[id].color;
+  const result = selected ? selected === data.answer : null;
+
+  return (
+    <article className="w-full">
+      <div className="flex items-start justify-between gap-4 border-b border-[#1c2a27]/15 pb-6">
+        <h4 className="text-2xl font-black tracking-[-.05em]" style={{ color }}>
+          {data.title}
+        </h4>
+        {result !== null && (
+          <span
+            className={`rounded-full px-3 py-1 text-xs font-bold ${
+              result ? 'bg-[#edf7f4] text-[#0f726b]' : 'bg-[#fff1f1] text-[#b45a5a]'
+            }`}
+          >
+            {result ? '정답이에요' : '다시 생각해봐요'}
+          </span>
+        )}
+      </div>
+
+      <p className="mt-7 text-lg font-black leading-8">{data.prompt}</p>
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        {data.options.map((option) => {
+          const chosen = selected === option;
+          const correct = option === data.answer;
+
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => onSelect(option)}
+              className={`rounded-xl border bg-white/70 px-4 py-4 text-left text-sm font-bold transition-colors ${
+                chosen
+                  ? correct
+                    ? 'border-[#0f726b] text-[#0f726b]'
+                    : 'border-[#d88f8f] text-[#9e5050]'
+                  : 'border-[#d9dfda] hover:border-[#0f726b]'
+              }`}
+            >
+              {option}
+              {chosen &&
+                (correct ? (
+                  <Check className="float-right h-5 w-5" />
+                ) : (
+                  <X className="float-right h-5 w-5" />
+                ))}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#1c2a27]/15 pt-5">
+        <span className="inline-flex items-center gap-2 text-sm font-medium text-[#60706b]">
+          <Lightbulb className="h-4 w-4" style={{ color }} />
+          힌트: {data.hint}
+        </span>
+        {selected && (
+          <button
+            type="button"
+            onClick={onReset}
+            className="inline-flex items-center gap-2 text-sm font-bold text-[#60706b]"
+          >
+            <RotateCcw className="h-4 w-4" /> 다시 풀기
+          </button>
+        )}
+      </div>
+
+      {selected && (
+        <div className="mt-5 border-t border-[#1c2a27]/15 pt-5 text-sm leading-7 text-[#52645d]">
+          <strong className="text-[#1c2a27]">tudu의 설명</strong>
+          <br />
+          {data.explanation}
+          <br />
+          <Link
+            href="/service"
+            className="mt-4 inline-flex items-center rounded-xl bg-[#0f726b] px-4 py-3 font-bold text-white"
+          >
+            이어하기 <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </div>
+      )}
+    </article>
+  );
+}
+
+export default function HomePage() {
+  const [answers, setAnswers] = useState<Partial<Record<SubjectId, string>>>({});
+  const choose = (id: SubjectId, value: string) =>
+    setAnswers((current) => ({ ...current, [id]: value }));
+  const reset = (id: SubjectId) =>
+    setAnswers((current) => {
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+
+  return (
+    <main className="min-h-screen bg-white text-[#1c2a27]">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-[#e5ebe7] bg-white/95 backdrop-blur">
+        <nav className="mx-auto flex h-[76px] max-w-6xl items-center justify-between px-5 sm:px-8">
+          <Link href="/" aria-label="tudu 홈">
+            <Image
+              src="/tudu.svg"
+              alt="tudu 정식 로고"
+              width={120}
+              height={36}
+              className="h-8 w-[88px] object-cover sm:h-9 sm:w-[120px]"
+              priority
+            />
+          </Link>
+          <div className="flex items-center gap-2 sm:gap-6">
+            <div className="hidden items-center gap-5 text-sm font-semibold text-[#52645d] sm:flex">
+              <a href="#intro" className="hover:text-[#0f726b]">소개</a>
+              <a href="#how-it-works" className="hover:text-[#0f726b]">학습 방식</a>
+              <a href="#try-english" className="hover:text-[#0f726b]">체험하기</a>
+            </div>
+            <Link
+              href="/service"
+              className="inline-flex items-center rounded-full bg-[#0f726b] px-5 py-3 text-sm font-bold text-white"
+            >
+              시작하기 <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </div>
+        </nav>
+      </header>
+
+      <section id="intro" className="flex min-h-svh items-center bg-white px-5 pb-12 pt-24 sm:px-8">
+        <div className="mx-auto w-full max-w-6xl">
+          <div className="max-w-3xl">
+            <p className="mb-6 inline-flex items-center gap-2 text-sm font-bold text-[#0f726b]">
+              <Sparkles className="h-4 w-4" /> AI 학습 파트너
+            </p>
+            <h1 className="text-[clamp(3.2rem,7vw,6.2rem)] font-black leading-[.95] tracking-[-.09em]">
+              정답보다
+              <br />
+              <span className="text-[#0f726b]">이해하는 힘</span>을
+              <br />
+              키워요.
+            </h1>
+            <p className="mt-8 max-w-xl text-lg font-medium leading-8 text-[#60706b]">
+              tudu는 문제를 대신 풀어주는 서비스가 아니에요. 막힌 순간에 필요한 힌트를 주고,
+              다음에는 혼자 풀 수 있게 도와주는 AI 학습 서비스예요.
+            </p>
+            <Link
+              href="#try-english"
+              className="mt-9 inline-flex items-center rounded-xl bg-[#0f726b] px-6 py-4 font-bold text-white shadow-[0_5px_0_#0b514d]"
+            >
+              체험 문제 풀어보기 <ArrowRight className="ml-3 h-5 w-5" />
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section id="how-it-works" className="flex min-h-svh items-center border-y border-[#e5ebe7] bg-white px-5 py-24 sm:px-8">
+        <div className="mx-auto w-full max-w-6xl">
+          <p className="text-sm font-bold uppercase tracking-[.16em] text-[#0f726b]">
+            how tudu works
+          </p>
+          <h2 className="mt-4 text-4xl font-black tracking-[-.07em] sm:text-5xl">
+            문제를 보고, 힌트로 생각하고,
+            <br />
+            다시 풀며 성장해요.
+          </h2>
+          <div className="mt-12 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-[#e5ebe7] bg-white p-6">
+              <ScanLine className="h-6 w-6 text-[#0f726b]" />
+              <h3 className="mt-14 text-xl font-black">문제를 보여주세요</h3>
+              <p className="mt-3 text-sm leading-6 text-[#667771]">
+                사진 한 장으로 조건과 핵심 개념을 읽어요.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#e5ebe7] bg-white p-6">
+              <Lightbulb className="h-6 w-6 text-[#0f726b]" />
+              <h3 className="mt-14 text-xl font-black">힌트로 생각해요</h3>
+              <p className="mt-3 text-sm leading-6 text-[#667771]">
+                개념·접근·검산, 세 단계로 풀어가요.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-[#e5ebe7] bg-white p-6">
+              <RotateCcw className="h-6 w-6 text-[#0f726b]" />
+              <h3 className="mt-14 text-xl font-black">다시 풀어봐요</h3>
+              <p className="mt-3 text-sm leading-6 text-[#667771]">
+                유사 문제와 오답 기록으로 배움을 남겨요.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {(['english', 'math', 'science'] as const).map((id) => {
+        const theme = SUBJECT_THEME[id];
+        const data = subjects[id];
+
+        return (
+          <section
+            key={id}
+            id={`try-${id}`}
+            aria-labelledby={`${id}-demo-title`}
+            className="flex min-h-svh items-center px-5 pb-12 pt-24 sm:px-8"
+            style={{ backgroundColor: `${theme.color}14` }}
+          >
+            <div className="mx-auto w-full max-w-4xl">
+              <p className="text-sm font-bold uppercase tracking-[.16em]" style={{ color: theme.color }}>
+                try by subject
+              </p>
+              <h2
+                id={`${id}-demo-title`}
+                className="mt-4 flex items-center gap-3 text-4xl font-black tracking-[-.07em] sm:text-5xl"
+                style={{ color: theme.color }}
+              >
+                <SubjectIcon subject={id} />
+                {data.label} 체험 문제
+              </h2>
+              <div className="mt-10 sm:mt-14">
+                <SubjectExercise
+                  id={id}
+                  data={data}
+                  selected={answers[id] ?? null}
+                  onSelect={(value) => choose(id, value)}
+                  onReset={() => reset(id)}
+                />
+              </div>
+            </div>
+          </section>
+        );
+      })}
+
+      <section id="get-started" className="flex min-h-svh flex-col bg-white px-5 pb-2 pt-20 sm:px-8">
+        <div className="mx-auto flex w-full max-w-6xl flex-1 items-center py-4">
+          <div className="w-full px-2 py-10 sm:px-12">
+            <p className="text-sm font-bold text-[#0f726b]">가입하면 바로 시작할 수 있어요</p>
+            <h2 className="mt-3 text-4xl font-black tracking-[-.07em] sm:text-5xl">
+              처음이라서 더 좋은
+              <br />
+              tudu 가입 혜택
+            </h2>
+            <ul className="mt-7 grid gap-3 text-sm font-bold text-[#52645d]">
+              <li>
+                <Check className="mr-2 inline h-5 w-5 text-[#0f726b]" />
+                첫 문제 무료 체험
+              </li>
+              <li>
+                <Check className="mr-2 inline h-5 w-5 text-[#0f726b]" />
+                3단계 AI 힌트
+              </li>
+              <li>
+                <Check className="mr-2 inline h-5 w-5 text-[#0f726b]" />
+                오답노트와 XP 기록
+              </li>
+            </ul>
+            <Link
+              href="/service"
+              className="mt-8 inline-flex items-center rounded-xl bg-[#0f726b] px-5 py-3 font-bold text-white"
+            >
+              서비스 시작하기 <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+        <footer className="mx-auto flex w-full max-w-6xl items-center justify-between border-t border-[#e5ebe7] py-4">
+          <Image
+            src="/tudu.svg"
+            alt="tudu 정식 로고"
+            width={52}
+            height={30}
+            className="h-7 w-10 object-contain"
+          />
+          <span className="text-sm font-medium text-[#7b8984]">
+            혼자 푸는 힘을 만드는 AI 학습
+          </span>
+        </footer>
+      </section>
+    </main>
+  );
 }

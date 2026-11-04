@@ -141,7 +141,8 @@ export function PersonalTab({ displayName, email, userId, idToken, wallet, rank,
           <StatCard label={`${subjectNames[subject]} 순위`} value={rank ? `${rank}위` : '—'} detail={`${xp[subject].toLocaleString()} XP`} />
           <StatCard label="종합 순위" value={overallRank ? `${overallRank}위` : '—'} detail="전체 과목 기준" />
           <StatCard label="총 경험치" value={`${(wallet?.xp ?? 0).toLocaleString()} XP`} detail="모든 과목 합계" />
-          <StatCard label="보유 토큰" value={(wallet?.tokens ?? 0).toLocaleString()} detail="학습 보상" />
+          <StatCard label="보유 크레딧" value={(wallet?.credits ?? 0).toLocaleString()} detail="학습 보상" />
+          <StatCard label="AI 토큰" value={(wallet?.tokens ?? 0).toLocaleString()} detail="문제 분석 사용" />
         </div>
         <div className="rounded-2xl border border-slate-300 p-4">
           <h3 className="mb-3 font-bold">과목별 경험치</h3>

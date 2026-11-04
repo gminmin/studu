@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { LogOut, UserRound } from 'lucide-react';
+import Link from 'next/link';
+import { LogOut, UserRound, X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import type { User } from 'firebase/auth';
 
@@ -124,13 +125,22 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({
   return (
     <main className="fixed inset-0 z-[80] flex min-h-dvh flex-col overflow-y-auto bg-white text-slate-950">
       <header className="flex min-h-16 shrink-0 items-center justify-between border-b border-slate-300 px-4 sm:px-6">
-        <Image
-          src="/tudu.svg"
-          alt="tudu"
-          width={200}
-          height={44}
-          className="h-11 w-[88px] object-cover sm:w-[200px]"
-        />
+        <Link href="/" aria-label="설명 페이지로 돌아가기">
+          <Image
+            src="/tudu.svg"
+            alt="tudu 정식 로고"
+            width={120}
+            height={36}
+            className="h-11 w-[88px] object-cover sm:h-9 sm:w-[120px]"
+          />
+        </Link>
+        <Link
+          href="/"
+          aria-label="로그인 닫고 설명 페이지로 돌아가기"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-950"
+        >
+          <X className="h-5 w-5" />
+        </Link>
       </header>
 
       <section className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-4 sm:px-8 sm:py-6">
