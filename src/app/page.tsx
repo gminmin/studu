@@ -212,7 +212,6 @@ export default function HomePage() {
 
   useEffect(() => {
     let currentIndex = 0;
-    let transitionTimeoutId: number | undefined;
     let titleTimeoutId: number | undefined;
 
     const intervalId = window.setInterval(() => {
@@ -231,18 +230,12 @@ export default function HomePage() {
       setLeavingSubjectId(currentSubjectId);
       setFeaturedSubjectIndex(nextIndex);
       setIsCardTransitioning(true);
-      window.clearTimeout(transitionTimeoutId);
-      transitionTimeoutId = window.setTimeout(() => {
-        setOutgoingSubjectId(null);
-        setIsCardTransitioning(false);
-      }, 800);
       window.clearTimeout(titleTimeoutId);
       titleTimeoutId = window.setTimeout(() => setLeavingSubjectId(null), 650);
     }, 4500);
 
     return () => {
       window.clearInterval(intervalId);
-      window.clearTimeout(transitionTimeoutId);
       window.clearTimeout(titleTimeoutId);
     };
   }, []);
@@ -282,6 +275,14 @@ export default function HomePage() {
         style={{ borderColor: color, backgroundColor: '#fff' }}
         aria-label={`${subject.label} 예시 정보`}
         aria-hidden={ariaHidden}
+        onAnimationEnd={
+          className === 'subject-card-next'
+            ? () => {
+                setOutgoingSubjectId(null);
+                setIsCardTransitioning(false);
+              }
+            : undefined
+        }
       >
         <div className="h-full">
           <div
