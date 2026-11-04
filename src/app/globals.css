@@ -40,6 +40,14 @@ textarea:focus-visible {
   padding: 0.5rem 0;
 }
 
+.subject-science-formula .katex-display {
+  overflow: visible;
+}
+
+.subject-science-formula .katex {
+  white-space: normal;
+}
+
 .success-glow-first {
   animation: solvify-success-first 3.2s ease-in-out both;
 }
@@ -77,3 +85,118 @@ html { scroll-behavior: smooth; }
 @media (min-width: 768px) { .step-card:not(:last-child)::before { content: '→'; position: absolute; right: -1.2rem; top: 50%; z-index: 2; color: #65d1bd; font-size: 1.5rem; font-weight: 900; } }
 @media (prefers-reduced-motion: no-preference) { .step-card { animation: rise-in .7s ease both; } .step-card:nth-child(2) { animation-delay: .1s; } .step-card:nth-child(3) { animation-delay: .2s; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+
+.subject-card-layer {
+  position: relative;
+  grid-area: 1 / 1;
+  transition:
+    transform 800ms cubic-bezier(.22, 1, .36, 1),
+    opacity 650ms ease;
+}
+
+.subject-card-main {
+  position: absolute;
+  top: 57%;
+  right: 20px;
+  left: 20px;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+}
+
+.subject-card-caption {
+  position: absolute;
+  right: 20px;
+  bottom: 34px;
+}
+
+@media (min-width: 640px) {
+  .subject-card-main {
+    right: 32px;
+    left: 32px;
+  }
+
+  .subject-card-caption {
+    right: 32px;
+  }
+}
+
+.subject-card-current {
+  z-index: 3;
+}
+
+.subject-card-next {
+  z-index: 2;
+  transform: translate(14px, 10px) scale(.97);
+}
+
+.subject-card-outgoing {
+  z-index: 2;
+}
+
+.subject-card-stack.is-transitioning .subject-card-outgoing {
+  z-index: 1;
+  transform: translateX(-64px) scale(.97);
+  opacity: 0;
+}
+
+.subject-card-stack.is-transitioning .subject-card-current {
+  z-index: 3;
+  transform: translate(0) scale(1);
+}
+
+.subject-card-stack.is-transitioning .subject-card-next {
+  z-index: 2;
+  animation: subject-card-back-enter 800ms cubic-bezier(.22, 1, .36, 1) both;
+}
+
+.subject-heading-window {
+  display: inline-grid;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.subject-heading {
+  display: inline-block;
+  grid-area: 1 / 1;
+}
+
+.subject-heading-enter {
+  animation: subject-heading-enter 600ms ease both;
+}
+
+.subject-heading-exit {
+  animation: subject-heading-exit 600ms ease both;
+}
+
+@keyframes subject-heading-enter {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes subject-heading-exit {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(100%); }
+}
+
+@keyframes subject-card-back-enter {
+  from { opacity: 0; transform: translate(24px, 18px) scale(.94); }
+  to { opacity: 1; transform: translate(14px, 10px) scale(.97); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .subject-card-layer,
+  .subject-heading {
+    transition: none;
+    animation: none;
+    opacity: 1;
+  }
+
+  .subject-card-next,
+  .subject-card-outgoing,
+  .subject-card-stack.is-transitioning .subject-card-outgoing,
+  .subject-card-stack.is-transitioning .subject-card-current,
+  .subject-card-stack.is-transitioning .subject-card-next {
+    transform: none;
+  }
+}

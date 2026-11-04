@@ -13,7 +13,8 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { MathRenderer } from '@/components/MathRenderer';
 import { SUBJECT_THEME } from '@/lib/subjects/theme';
 
 type SubjectId = 'english' | 'math' | 'science';
@@ -58,21 +59,47 @@ const subjects: Record<SubjectId, SubjectData> = {
   },
 };
 
-function SubjectIcon({ subject }: { subject: SubjectId }) {
+const subjectOrder: SubjectId[] = ['english', 'math', 'science'];
+
+function SubjectIcon({
+  subject,
+  size = 'default',
+  onColor = false,
+}: {
+  subject: SubjectId;
+  size?: 'default' | 'large' | 'small';
+  onColor?: boolean;
+}) {
   const color = SUBJECT_THEME[subject].color;
+  const foreground = SUBJECT_THEME[subject].foreground;
+  const isLarge = size === 'large';
 
   return (
     <span
       aria-hidden="true"
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
-      style={{ backgroundColor: `${color}30`, color }}
+      className={`flex shrink-0 items-center justify-center ${
+        isLarge
+          ? 'h-20 w-20 rounded-full border sm:h-24 sm:w-24'
+          : size === 'small'
+            ? 'h-9 w-9 rounded-full sm:h-10 sm:w-10'
+            : 'h-11 w-11 rounded-xl'
+      }`}
+      style={
+        onColor
+          ? {
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              borderColor: 'rgba(255, 255, 255, 0.35)',
+              color: foreground,
+            }
+          : { backgroundColor: `${color}30`, borderColor: `${color}60`, color }
+      }
     >
       {subject === 'english' ? (
-        <span className="text-sm font-black tracking-[-0.08em]">AZ</span>
+        <span className={`font-black tracking-[-0.08em] ${isLarge ? 'text-2xl' : size === 'small' ? 'text-xs' : 'text-sm'}`}>AZ</span>
       ) : subject === 'science' ? (
-        <Microscope className="h-5 w-5" />
+        <Microscope className={isLarge ? 'h-9 w-9' : size === 'small' ? 'h-4 w-4' : 'h-5 w-5'} />
       ) : (
-        <Calculator className="h-5 w-5" />
+        <Calculator className={isLarge ? 'h-9 w-9' : size === 'small' ? 'h-4 w-4' : 'h-5 w-5'} />
       )}
     </span>
   );
@@ -178,6 +205,48 @@ function SubjectExercise({
 
 export default function HomePage() {
   const [answers, setAnswers] = useState<Partial<Record<SubjectId, string>>>({});
+  const [featuredSubjectIndex, setFeaturedSubjectIndex] = useState(0);
+  const [leavingSubjectId, setLeavingSubjectId] = useState<SubjectId | null>(null);
+  const [outgoingSubjectId, setOutgoingSubjectId] = useState<SubjectId | null>(null);
+  const [isCardTransitioning, setIsCardTransitioning] = useState(false);
+
+  useEffect(() => {
+    let currentIndex = 0;
+    let transitionTimeoutId: number | undefined;
+    let titleTimeoutId: number | undefined;
+
+    const intervalId = window.setInterval(() => {
+      const currentSubjectId = subjectOrder[currentIndex % subjectOrder.length];
+      const nextIndex = (currentIndex + 1) % subjectOrder.length;
+
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        currentIndex = nextIndex;
+        setLeavingSubjectId(null);
+        setFeaturedSubjectIndex(nextIndex);
+        return;
+      }
+
+      currentIndex = nextIndex;
+      setOutgoingSubjectId(currentSubjectId);
+      setLeavingSubjectId(currentSubjectId);
+      setFeaturedSubjectIndex(nextIndex);
+      setIsCardTransitioning(true);
+      window.clearTimeout(transitionTimeoutId);
+      transitionTimeoutId = window.setTimeout(() => {
+        setOutgoingSubjectId(null);
+        setIsCardTransitioning(false);
+      }, 800);
+      window.clearTimeout(titleTimeoutId);
+      titleTimeoutId = window.setTimeout(() => setLeavingSubjectId(null), 650);
+    }, 4500);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.clearTimeout(transitionTimeoutId);
+      window.clearTimeout(titleTimeoutId);
+    };
+  }, []);
+
   const choose = (id: SubjectId, value: string) =>
     setAnswers((current) => ({ ...current, [id]: value }));
   const reset = (id: SubjectId) =>
@@ -186,6 +255,86 @@ export default function HomePage() {
       delete next[id];
       return next;
     });
+  const featuredSubjectId = subjectOrder[featuredSubjectIndex % subjectOrder.length];
+  const featuredSubject = subjects[featuredSubjectId];
+  const featuredSubjectColor = SUBJECT_THEME[featuredSubjectId].color;
+  const featuredSubjectParticle = featuredSubjectId === 'english' ? '를' : '을';
+  const nextSubjectId = subjectOrder[(featuredSubjectIndex + 1) % subjectOrder.length];
+
+  const renderSubjectCard = (
+    id: SubjectId,
+    className: string,
+    ariaHidden: boolean,
+  ) => {
+    const subject = subjects[id];
+    const color = SUBJECT_THEME[id].color;
+    const foreground = SUBJECT_THEME[id].foreground;
+    const infoTitle = {
+      english: '영어 시',
+      math: '수학 공식',
+      science: '화학식',
+    }[id];
+
+    return (
+      <article
+        key={id}
+        className={`subject-card-layer h-[390px] rounded-3xl border-2 border-t-4 bg-white px-5 py-7 sm:h-[360px] sm:px-8 ${className}`}
+        style={{ borderColor: color, backgroundColor: '#fff' }}
+        aria-label={`${subject.label} 예시 정보`}
+        aria-hidden={ariaHidden}
+      >
+        <div className="h-full">
+          <div
+            className="flex items-center gap-3 rounded-t-2xl -mx-5 -mt-7 px-5 py-5 sm:-mx-8 sm:-mt-7 sm:px-8"
+            style={{ backgroundColor: color, color: foreground }}
+          >
+            <SubjectIcon subject={id} onColor />
+            <h3 className="text-xl font-black tracking-[-.04em]">
+              {infoTitle}
+            </h3>
+          </div>
+          {id === 'english' ? (
+            <div className="subject-card-main">
+              <div>
+                <blockquote
+                  className="px-1 text-center text-xl font-black leading-relaxed sm:text-2xl"
+                  style={{ color }}
+                >
+                  “Shall I compare thee to a summer&apos;s day?”
+                </blockquote>
+                <p className="mt-3 text-center text-sm leading-6 text-[#8a9290]">
+                  “그대를 여름날에 비유해 볼까요?”
+                </p>
+              </div>
+            </div>
+          ) : id === 'math' ? (
+            <div className="subject-card-main" style={{ color }}>
+                <MathRenderer
+                  content={'\\boldsymbol{a^2 + b^2 = c^2}'}
+                  block
+                  className="text-2xl sm:text-3xl"
+                />
+            </div>
+          ) : (
+            <div className="subject-card-main" style={{ color }}>
+                <MathRenderer
+                  content={'\\mathbf{6CO_2 + 6H_2O \\rightarrow C_6H_{12}O_6 + 6O_2}'}
+                  block
+                  className="subject-science-formula text-sm sm:text-base"
+                />
+            </div>
+          )}
+          <p className="subject-card-caption text-right text-xs font-semibold text-[#718078]">
+            {id === 'english'
+              ? 'William Shakespeare, Sonnet 18'
+              : id === 'math'
+                ? '피타고라스 정리'
+                : '광합성 공식'}
+          </p>
+        </div>
+      </article>
+    );
+  };
 
   return (
     <main className="min-h-screen bg-white text-[#1c2a27]">
@@ -205,6 +354,7 @@ export default function HomePage() {
             <div className="hidden items-center gap-5 text-sm font-semibold text-[#52645d] sm:flex">
               <a href="#intro" className="hover:text-[#0f726b]">소개</a>
               <a href="#how-it-works" className="hover:text-[#0f726b]">학습 방식</a>
+              <a href="#subjects" className="hover:text-[#0f726b]">과목</a>
               <a href="#try-english" className="hover:text-[#0f726b]">체험하기</a>
             </div>
             <Link
@@ -276,6 +426,64 @@ export default function HomePage() {
                 유사 문제와 오답 기록으로 배움을 남겨요.
               </p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        id="subjects"
+        aria-labelledby="subjects-title"
+        className="flex min-h-svh items-center bg-white px-5 py-24 sm:px-8"
+      >
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-2 lg:gap-16">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-[.16em] text-[#0f726b]">
+              subjects for you
+            </p>
+            <h2
+              id="subjects-title"
+              className="mt-5 text-4xl font-black leading-tight tracking-[-.07em] sm:text-5xl"
+            >
+              tudu로{' '}
+              <span className="subject-heading-window" style={{ color: featuredSubjectColor }}>
+                {leavingSubjectId && (
+                  <span
+                    aria-hidden="true"
+                    className="subject-heading subject-heading-exit"
+                    style={{ color: SUBJECT_THEME[leavingSubjectId].color }}
+                  >
+                    {subjects[leavingSubjectId].label}
+                  </span>
+                )}
+                <span key={featuredSubjectId} className="subject-heading subject-heading-enter">
+                  {featuredSubject.label}
+                </span>
+              </span>
+              {featuredSubjectParticle} 공부하세요.
+            </h2>
+          </div>
+
+          <div
+            className={`subject-card-stack grid relative px-3 pb-3 pt-2 ${isCardTransitioning ? 'is-transitioning' : ''}`}
+            aria-label="과목별 예시 정보"
+            aria-live="polite"
+          >
+            {outgoingSubjectId &&
+              renderSubjectCard(
+                outgoingSubjectId,
+                'subject-card-outgoing',
+                true,
+              )}
+            {renderSubjectCard(
+              featuredSubjectId,
+              'subject-card-current',
+              false,
+            )}
+            {renderSubjectCard(
+              nextSubjectId,
+              'subject-card-next',
+              true,
+            )}
           </div>
         </div>
       </section>
