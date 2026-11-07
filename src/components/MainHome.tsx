@@ -6,6 +6,7 @@ import type { SubjectType } from '@/types/problem';
 import { CREDITS_PER_TOKEN, type Wallet } from '@/lib/economy';
 import { SUBJECT_THEME } from '@/lib/subjects/theme';
 import { PersonalTab } from '@/components/PersonalTab';
+import { GoogleAd } from '@/components/GoogleAd';
 
 export type MainTab = 'home' | 'ranking' | 'personal';
 type TopMenu = 'subject' | 'rank' | 'credits' | 'tokens' | null;
@@ -93,6 +94,9 @@ export function MainHome({ subject, onSubjectChange, wallet, walletError, rank, 
               </button>
               <button type="button" onClick={onOpenWrongNotes} className="mt-3 min-h-11 rounded-xl px-3 text-sm font-bold text-teal-800 active:bg-teal-50"><span className="underline underline-offset-4">오답노트 복습하기</span></button>
             </section>
+            <div className="mt-6">
+              <GoogleAd />
+            </div>
           </>}
           {activeTab === 'ranking' && <section><div className="mb-5 flex items-center gap-3"><Trophy className="h-7 w-7"/><div><h1 className="text-2xl font-extrabold">랭킹</h1><p className="text-sm text-slate-600">문제를 풀어 XP를 모아보세요.</p></div></div><Leaderboard leaders={leaders} /></section>}
           {activeTab === 'personal' && <PersonalTab displayName={displayName} email={email} userId={userId} idToken={idToken} wallet={wallet} rank={rank} overallRank={overallRank} subject={subject} onSubjectChange={onSubjectChange} onSignOut={onSignOut} />}

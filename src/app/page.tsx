@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { MathRenderer } from '@/components/MathRenderer';
+import { GoogleAd } from '@/components/GoogleAd';
 import { SUBJECT_THEME } from '@/lib/subjects/theme';
 
 type SubjectId = 'english' | 'math' | 'science';
@@ -557,6 +558,9 @@ export default function HomePage() {
               서비스 시작하기 <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </div>
+        </div>
+        <div className="mx-auto w-full max-w-4xl py-4">
+          <GoogleAd />
         </div>
         <footer className="mx-auto flex w-full max-w-6xl items-center justify-between border-t border-[#e5ebe7] py-4">
           <Image
